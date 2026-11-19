@@ -57,6 +57,7 @@ BANKLVL equ     $3B             ; level bank: each level's seen cells, 1K per le
         org     $0E00
 
 start   orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
+        clr     $FF40           ; drive motor off (Disk BASIC would do it from its own IRQ, now gone)
         sta     $FFDF           ; all-RAM mode (BASIC already runs this way; make sure)
         ldx     #HIGHLOAD       ; copy the high code up to $E000 before anything remaps $6000
         ldu     #HIGHWIN
