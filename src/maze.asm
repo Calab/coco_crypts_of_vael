@@ -50,7 +50,8 @@ mklevel ldb     #BANKSCR
         addd    #1              ; start cell (1,1)
         lbsr    bfs
         lbsr    findfar
-        lbra    placeitems
+        lbsr    placeitems
+        lbra    placemons
 
 * cellad: A = x, B = y. Returns X = address of that grid cell. Uses D.
 cellad  pshs    a
@@ -359,6 +360,151 @@ placeitems
         bne     @fl
         rts
 
+* ---- monsters: the rest of the reference's buildLevel ----
+* placemons: the level's monsters in its LEVELS order, each free(8); level 5's king on the far cell;
+* seed 0's showcase monsters (asleep); then every monster but the king carries loot if RNG() < 0.35.
+placemons
+        clr     nmons
+        ldb     mz_lvl
+        decb
+        lslb
+        ldx     #lvmons
+        ldx     b,x
+        stx     pip
+@group  ldx     pip             ; (kind, how many) pairs, $FF ends
+        lda     ,x+
+        cmpa    #$FF
+        beq     @boss
+        sta     mkind
+        lda     ,x+
+        sta     pcnt
+        stx     pip
+@one    lda     #8
+        lbsr    ifree
+        bcs     @nofree
+        clr     mflags
+        lbsr    addmon
+@nofree dec     pcnt
+        bne     @one
+        bra     @group
+@boss   lda     mz_lvl          ; the Hollow King waits on level 5's far cell
+        cmpa    #5
+        bne     @show
+        lda     #M_KING
+        sta     mkind
+        clr     mflags
+        lda     farx
+        ldb     fary
+        lbsr    addmon
+@show   clr     mkind           ; seed 0's showcase: one of each kind, asleep, in order
+        ldx     #showc
+@sc     lda     ,x
+        cmpa    #$FF
+        beq     @scn
+        ldb     1,x
+        pshs    x
+        lda     #MF_DORMANT
+        sta     mflags
+        lda     ,x
+        lbsr    addmon
+        puls    x
+@scn    leax    2,x
+        inc     mkind
+        lda     mkind
+        cmpa    #7
+        blo     @sc
+        lda     nmons           ; loot: RNG() < 0.35 means the 32-bit value is below $5999999A
+        beq     @done
+        sta     pcnt
+        ldx     #mons
+@loot   stx     pip
+        lda     2,x
+        cmpa    #M_KING
+        beq     @nl
+        lbsr    rng32
+        ldd     rngout
+        cmpd    #$5999
+        blo     @carry
+        bhi     @nl
+        ldd     rngout+2
+        cmpd    #$999A
+        bhs     @nl
+@carry  ldd     #11             ; pick(LOOT)
+        lbsr    rndn
+        ldx     #loot
+        lda     b,x
+        ldx     pip
+        sta     7,x
+@nl     ldx     pip
+        leax    MONREC,x
+        dec     pcnt
+        bne     @loot
+@done   rts
+
+* addmon: A = x, B = y, mkind = kind, mflags = flags. Health is the kind's scaled for the level.
+addmon  pshs    d
+        lda     nmons
+        cmpa    #MAXMONS
+        bhs     @full
+        ldb     #MONREC
+        mul
+        addd    #mons
+        tfr     d,x
+        puls    d
+        std     ,x              ; x, y
+        lda     mkind
+        sta     2,x
+        ldb     mz_lvl          ; hp = round(MON hp * (1 + (n-1) * 0.28)), from a table
+        decb
+        lda     #7*2
+        mul
+        addd    #mhp
+        tfr     d,u
+        ldb     mkind
+        lslb
+        ldd     b,u
+        std     3,x             ; hp
+        std     5,x             ; most hp
+        lda     #$FF            ; carries nothing (yet)
+        sta     7,x
+        lda     mflags
+        sta     8,x
+        clr     9,x             ; (simulation state, later)
+        clr     10,x
+        clr     11,x
+        clr     12,x
+        clr     13,x
+        inc     nmons
+        rts
+@full   puls    d,pc
+
+* Monster kinds (the reference's MON order, weakest first)
+M_MOULD    equ  0
+M_CRAWLER  equ  1
+M_SKELETON equ  2
+M_HOUND    equ  3
+M_WRAITH   equ  4
+M_GOLEM    equ  5
+M_KING     equ  6
+MF_DORMANT equ  1               ; asleep until struck (seed 0's showcase)
+MAXMONS    equ  20              ; per level
+MONREC     equ  14              ; x, y, kind, hp (2), most hp (2), carry, flags, 5 for the simulation
+
+* LEVELS[n].mons as (kind, count) pairs, in the reference's key order
+lvmons  fdb     lvm1,lvm2,lvm3,lvm4,lvm5
+lvm1    fcb     M_MOULD,4,M_CRAWLER,4,M_SKELETON,2,$FF
+lvm2    fcb     M_MOULD,2,M_CRAWLER,3,M_SKELETON,3,M_HOUND,2,$FF
+lvm3    fcb     M_SKELETON,3,M_HOUND,3,M_WRAITH,2,$FF
+lvm4    fcb     M_HOUND,2,M_WRAITH,3,M_GOLEM,2,$FF
+lvm5    fcb     M_WRAITH,2,M_GOLEM,3,$FF
+loot    fcb     K_HERB,K_HERB,K_MENDING,K_MENDING,K_TORCH,K_LANTERN,K_VIGOR,K_DAGGER,K_AXE,K_SWORD,K_BUCKLER
+* Health by level (rows) and kind: round(MON hp * (1 + (n-1) * 0.28))
+mhp     fdb     8,16,24,42,38,80,210
+        fdb     10,20,31,54,49,102,269
+        fdb     12,25,37,66,59,125,328
+        fdb     15,29,44,77,70,147,386
+        fdb     17,34,51,89,81,170,445
+
 * additem: A = x, B = y, ikind = kind. Adds it to the level's items (lights start with full time).
 additem pshs    d
         lda     nitems
@@ -595,6 +741,8 @@ pip     fdb     0
 pcnt    fcb     0
 pxy     fdb     0
 ikind   fcb     0
+mkind   fcb     0
+mflags  fcb     0
 fmin    fcb     0
 ftry    fdb     0
 fi      fdb     0
@@ -607,5 +755,3 @@ sd      fcb     0
 sidx    fdb     0
 stf     fdb     0
 showc   fill    $FF,14          ; seed 0's showcase cells (x, y) for the 7 monsters; $FF = none
-nitems  fcb     0
-items   fill    0,MAXITEMS*ITEMREC

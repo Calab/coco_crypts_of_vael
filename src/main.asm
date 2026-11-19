@@ -13,6 +13,7 @@
 *                     walkdone (for timing and screenshots)
 
         include "gime.inc"
+        include "data.sym"      ; addresses in the data file (build/data.sym, from src/data.asm)
 
 SCRCPU  equ     $4000           ; where the page being drawn is mapped (CPU $4000-$BFFF)
 
@@ -37,7 +38,8 @@ PAGE0BLK equ    SCR0BLK         ; physical blocks $30-$33
 PAGE1BLK equ    SCR0BLK+4       ; physical blocks $34-$37
 
 * Memory map (CPU address: what's there, physical block):
-*   $0000-$0CFF  stack (below $0D00) and spare                        $38
+*   $0100-$0B7F  buffers that start empty (grid, seen, items, log, monsters)  $38
+*   $0B80-$0CFF  stack (grows down from $0D00)                        $38
 *   $0D00-$0DFF  direct page variables                                $38
 *   $0E00-$3FFF  fixed code and data (must end below $4000)           $38-$39
 *   $4000-$BFFF  the screen page being drawn                          $30-$33 or $34-$37
@@ -46,17 +48,34 @@ PAGE1BLK equ    SCR0BLK+4       ; physical blocks $34-$37
 *   $FC00-$FFFF  unchanged ($FExx vectors, $FFxx I/O)                 $3F
 * The common bank is assembled at $C000 but stored in the .bin at $4000 (tools/relocate.py), where
 * LOADM puts it in block $3A; start maps that block into the bank window.
+* Buffers in BASIC's old variable area. LOADM can't load there (BASIC uses it while loading), so
+* only things that are filled in before they're read live here.
+LOWBUF  equ     $0100
+grid    equ     LOWBUF          ; maze, 1 = wall (31*31)
+seen    equ     grid+31*31      ; the current level's seen cells (31*31)
+nitems  equ     seen+31*31      ; the current level's items: count, then records (kept together
+items   equ     nitems+1        ;   for itemsave / itemload)
+logtxt  equ     items+48*5      ; the message log (4 lines of 41)
+nmons   equ     logtxt+4*41     ; the current level's monsters: count, then records (kept together
+mons    equ     nmons+1         ;   for monsave / monload)
+LOWEND  equ     mons+20*14
+        ifgt    LOWEND-$0B80
+        error   "low buffers run into the stack"
+        endc
+
 BANKWIN equ     $C000
 HIGHWIN equ     $E000           ; high code runs here...
 HIGHLOAD equ    $6000           ; ...and is loaded here (tools/relocate.py)
 BANKCOM equ     $3A             ; common bank: font, tables (loaded with the program)
 BANKSCR equ     $3C             ; scratch bank: maze-building buffers (not loaded)
 BANKLVL equ     $3B             ; level bank: each level's seen cells, 1K per level (not loaded)
+BANKDAT equ     $3D             ; data bank: VAELDATA.DAT (shapes), read from disk at start-up
         setdp   $0D
 
         org     $0E00
 
-start   orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
+start   lbsr    dataload        ; while BASIC still runs: read VAELDATA.DAT (the one ROM call)
+        orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
         clr     $FF40           ; drive motor off (Disk BASIC would do it from its own IRQ, now gone)
         sta     $FFDF           ; all-RAM mode (BASIC already runs this way; make sure)
         ldx     #HIGHLOAD       ; copy the high code up to $E000 before anything remaps $6000
@@ -71,6 +90,8 @@ start   orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
         lda     #$0D
         tfr     a,dp
         sta     SPEEDHI         ; 1.79 MHz
+
+        lbsr    dataplace       ; the data file, from its staging blocks into its bank
 
 * GIME: CoCo-compatible mode off, MMU on, constant RAM at $FExx, standard SCS
         lda     #$4C
@@ -142,12 +163,50 @@ start   orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
         leax    ITEMREC,x
         decb
         bne     @it
-@itd    lda     mtlvl
+@itd    ldb     mtlvl           ; monsters: count, then x, y, kind, carry, flags each, at
+        decb                    ; SCRCPU+7424+(n-1)*128
+        lda     #128
+        mul
+        addd    #SCRCPU+7424
+        tfr     d,u
+        lda     nmons
+        sta     ,u+
+        ldx     #mons
+        ldb     nmons
+        beq     @mnd
+@mn     lda     ,x
+        sta     ,u+
+        lda     1,x
+        sta     ,u+
+        lda     2,x
+        sta     ,u+
+        lda     7,x
+        sta     ,u+
+        lda     8,x
+        sta     ,u+
+        leax    MONREC,x
+        decb
+        bne     @mn
+@mnd    lda     mtlvl
         inca
         cmpa    #6
-        blo     @mt
+        lblo    @mt
 mazedone bra    mazedone
         endc
+
+* No data file? Say so and stop (black and white, readable on any monitor)
+        tst     dlok
+        bne     @dataok
+        ldx     #askpal
+        lbsr    setpal
+        lbsr    clrscr
+        lda     #TXBLUE
+        sta     textmask
+        ldd     #(11<<8)|1
+        ldy     #s_nodata
+        lbsr    printat
+nodata  bra     nodata          ; (screenshot point: the data file is missing)
+@dataok
 
 * Ask which monitor, in black and white (the same on RGB and composite)
         ldx     #askpal
@@ -319,6 +378,7 @@ enterlevel
         pshs    a
         lbsr    seensave
         lbsr    itemsave
+        lbsr    monsave
         puls    a
 @first  lbsr    mklevel         ; (its maze is the same every time; its items are placed afresh)
         lbsr    seenload
@@ -328,6 +388,7 @@ enterlevel
         tst     b,x
         beq     @fresh
         lbsr    itemload
+        lbsr    monload
         bra     @vis
 @fresh  lda     #1
         sta     b,x
@@ -681,6 +742,7 @@ setpal  pshs    d,x,y,u
         include "view.asm"
         include "msg.asm"
         include "items.asm"
+        include "dload.asm"
         ifdef   FONTTEST
         include "fonttest.asm"
         endc
@@ -695,6 +757,9 @@ askpal  fcb     $00,$3F,$3F,$3F ; black and white: looks the same on either moni
 s_title fcn     "CRYPTS OF VAEL"
 s_ask1  fcn     "PRESS R FOR RGB MONITOR"
 s_ask2  fcn     "OR C FOR COMPOSITE"
+s_nodata fcn    "VAELDATA.DAT IS MISSING FROM THE DISK"
+secbuf  fill    0,256           ; a disk sector (start-up only)
+ptbuf   fill    0,24*3          ; drawshp: one polyline's points on screen (x 2 bytes, y)
 
 lightnext fcb   7,0,0,0,0,0,0,4 ; indexed by vlight: [0] none -> 7, [4] torch -> 0, [7] lantern -> 4
 dirname fcn     "NORTH"         ; 6 bytes each
@@ -732,7 +797,6 @@ lvlon   fcb     0               ; a level is in play (its seen cells need saving
 lvlvis  fcb     0,0,0,0,0       ; levels visited (their items are kept in BANKLVL)
 
 * ---- Buffers: reserved, not stored in the .bin. Must end below $4000 (screen window). ----
-grid    rmb     31*31           ; maze, 1 = wall
 progend
         ifgt    progend-$4000
         error   "fixed code and data run past $3FFF into the screen window"
@@ -754,7 +818,6 @@ highend
         include "font.asm"
         include "tables.asm"
         include "strings.asm"
-        include "icons.asm"
 bankcomend
         ifgt    bankcomend-(BANKWIN+$2000)
         error   "common bank is over 8K"

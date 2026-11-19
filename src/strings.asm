@@ -120,7 +120,10 @@ o_resume fcn    "ENTER ANY COMMAND TO RESUME"
 
 * Maps
 m_yourmap fcn   "YOUR MAP - DEPTH "
-m_fullmap fcn   "FULL MAZE (TEST VIEW) - DEPTH "
+m_fullmap fcn   "FULL MAZE - DEPTH "    ; (reference: "FULL MAZE (TEST VIEW) - DEPTH n"; shortened to fit the counts)
+m_sp3   fcn     "   "
+m_foes  fcn     " FOES  "
+m_itemsn fcn    " ITEMS"
 m_maplegend fcn "V = DOWN  ^ = UP           LOOK TO CLOSE"   ; (ours: the reference colours V/^ instead)
 m_mapclose fcn  "                           LOOK TO CLOSE"
 
@@ -230,3 +233,18 @@ m_rcolon fcn    "R: "
 m_empty fcn     "EMPTY"
 m_hp    fcn     "HP "
 m_slash fcn     "/"
+
+* Monster names (the reference's MON), by kind
+mnames  fdb     n_mould,n_crawler,n_skeleton,n_hound,n_wraith,n_golem,n_king
+n_mould fcn     "SLIME MOULD"
+n_crawler fcn   "GLOOMCRAWLER"
+n_skeleton fcn  "SKELETON"
+n_hound fcn     "BONE HOUND"
+n_wraith fcn    "ASH WRAITH"
+n_golem fcn     "IRON GOLEM"
+n_king  fcn     "HOLLOW KING"
+m_face  fcn     "YOU ARE FACE TO FACE WITH THE "
+m_bang  fcn     "!"
+m_sleeps fcn    " SLEEPS RIGHT HERE."
+m_inway fcn     " IS IN THE WAY. KILL IT FIRST."
+m_guards fcn    " GUARDS IT. KILL IT FIRST."

@@ -484,6 +484,7 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         lbra    msg
 @moved  lda     #1
         sta     vdirty
+        lbsr    meetmon         ; the reference's move: the monster here, the items, the ladder
         lbsr    seehere
         lbsr    ondown
         bne     @ret
@@ -715,6 +716,36 @@ c_xinfo lbsr    mbstart         ; AT x,y FACING dir. DRAW n/60 SEC.
         ldx     #m_sixty
         lbsr    mbstr
         lbra    mbsend
+
+* meetmon: "YOU ARE FACE TO FACE WITH THE BONE HOUND!" (or "THE ... SLEEPS RIGHT HERE.") if a
+* monster shares your new cell
+meetmon ldd     px
+        lbsr    monat
+        bne     @ret
+        lda     8,x
+        pshs    a
+        lbsr    mbstart
+        puls    a
+        bita    #MF_DORMANT
+        bne     @asleep
+        ldx     #m_face
+        lbsr    mbstr
+        lbsr    mbmon
+        ldx     #m_bang
+        bra     @end
+@asleep ldx     #m_the
+        lbsr    mbstr
+        lbsr    mbmon
+        ldx     #m_sleeps
+@end    lbsr    mbstr
+        lbra    mbsend
+@ret    rts
+
+* mbmon: B = monster kind: add its name to the message being built
+mbmon   lslb
+        ldx     #mnames
+        ldx     b,x
+        lbra    mbstr
 
 * seehere: "YOU SEE A DAGGER, AN OIL LANTERN HERE." for the items where you stand (the reference's move)
 seehere ldx     #items

@@ -149,6 +149,42 @@ itemload
         sta     MMUT0+6
         rts
 
+* monslot: X = this level's monster list in the level bank (after the items, 288 bytes each)
+monslot lda     #BANKLVL
+        sta     MMUT0+6
+        lda     mz_lvl
+        deca
+        ldb     #288/2
+        mul
+        lslb
+        rola
+        addd    #BANKWIN+5*1024+5*256
+        tfr     d,x
+        rts
+
+* monsave / monload: keep / bring back the current level's monsters (count, then the records)
+monsave bsr     monslot
+        ldu     #nmons
+        ldy     #1+MAXMONS*MONREC
+@copy   lda     ,u+
+        sta     ,x+
+        leay    -1,y
+        bne     @copy
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
+monload bsr     monslot
+        ldu     #nmons
+        ldy     #1+MAXMONS*MONREC
+@copy   lda     ,x+
+        sta     ,u+
+        leay    -1,y
+        bne     @copy
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
 * seenclear: a new game: nothing seen on any level
 seenclear
         lda     #BANKLVL
@@ -233,10 +269,11 @@ mapdraw lbsr    clrview         ; rows 0-135, then 136-183
         sta     mlup
         tfr     a,b             ; (1,1)
         lbsr    vmark
-@you    lda     vmode           ; REVEAL: every item, as a diamond
+@you    lda     vmode           ; REVEAL: every item, as a diamond, and every monster, as its letter
         cmpa    #2
         bne     @arrow
         lbsr    diamonds
+        lbsr    monletters
 @arrow  lda     #TXBLUE         ; you: an arrow pointing the way you face
         lbsr    setcol
         lbsr    arrow
@@ -252,7 +289,22 @@ mapdraw lbsr    clrview         ; rows 0-135, then 136-183
         clra
         ldb     mz_lvl
         lbsr    mbnum
-        ldu     mbp
+        lda     vmode           ; REVEAL: how many foes and items (the reference's legend counts)
+        cmpa    #2
+        bne     @tdone
+        ldx     #m_sp3
+        lbsr    mbstr
+        clra
+        ldb     nmons
+        lbsr    mbnum
+        ldx     #m_foes
+        lbsr    mbstr
+        clra
+        ldb     nitems
+        lbsr    mbnum
+        ldx     #m_itemsn
+        lbsr    mbstr
+@tdone  ldu     mbp
         clr     ,u
         clra
         ldy     #mbuf
@@ -332,6 +384,116 @@ dseg    stx     <lx1
         sta     <ly0
         stb     <ly1
         lbra    line
+
+* monletters: each monster as a small red letter in its cell, the reference's map letters (S mould,
+* C crawler, B skeleton, H hound, W wraith, G golem, K king), drawn with lines to fit the cell; a
+* short light blue mark at the top right if it carries something
+monletters
+        lda     nmons
+        lbeq    @end
+        sta     mlcnt
+        ldx     #mons
+@each   stx     mlp
+        lda     ,x              ; the cell's top left, inset: x + 2, y + 1; usable cw - 4 by ch - 2
+        ldb     mcw
+        mul
+        addd    mox
+        addd    #2
+        std     mlx
+        ldx     mlp
+        lda     1,x
+        ldb     mch
+        mul
+        addb    moy
+        incb
+        stb     mly
+        lda     #TXRED
+        lbsr    setcol
+        ldx     mlp
+        ldb     2,x
+        lslb
+        ldx     #mletters
+        ldx     b,x
+        lda     ,x+             ; polylines
+        sta     mlpn
+@poly   lda     ,x+
+        sta     mlpt
+        bsr     @pt
+        ldd     mpx
+        std     mqx
+        lda     mpy
+        sta     mqy
+        dec     mlpt
+@seg    bsr     @pt
+        stx     mlq
+        ldd     mqx
+        std     <lx0
+        lda     mqy
+        sta     <ly0
+        ldd     mpx
+        std     <lx1
+        std     mqx
+        lda     mpy
+        sta     <ly1
+        sta     mqy
+        lbsr    line
+        ldx     mlq
+        dec     mlpt
+        bne     @seg
+        dec     mlpn
+        bne     @poly
+        ldx     mlp             ; carries something: a short mark at the top right of the cell
+        lda     7,x
+        cmpa    #$FF
+        beq     @next
+        lda     #TXBLUE
+        lbsr    setcol
+        ldd     mlx
+        addb    mcw
+        adca    #0
+        subd    #4
+        std     <lx1
+        subd    #2
+        std     <lx0
+        lda     mly
+        deca
+        sta     <ly0
+        sta     <ly1
+        lbsr    line
+@next   ldx     mlp
+        leax    MONREC,x
+        dec     mlcnt
+        lbne    @each
+@end    rts
+@pt     lda     ,x+             ; a letter point (0-4, 0-4) to the screen
+        ldb     mcw
+        subb    #4
+        mul
+        lsra
+        rorb
+        lsra
+        rorb
+        addd    mlx
+        std     mpx
+        lda     ,x+
+        ldb     mch
+        subb    #2
+        mul
+        lsrb
+        lsrb
+        addb    mly
+        stb     mpy
+        rts
+
+* The map letters, on a 0-4 grid (y down): polylines, then points
+mletters fdb    ml_s,ml_c,ml_b,ml_h,ml_w,ml_g,ml_k
+ml_s    fcb     1,6,4,0,0,0,0,2,4,2,4,4,0,4
+ml_c    fcb     1,4,4,0,0,0,0,4,4,4
+ml_b    fcb     2,6,0,0,0,4,3,4,4,3,3,2,0,2,4,3,2,4,1,3,0,0,0
+ml_h    fcb     3,2,0,0,0,4,2,4,0,4,4,2,0,2,4,2
+ml_w    fcb     1,5,0,0,1,4,2,2,3,4,4,0
+ml_g    fcb     1,6,4,0,0,0,0,4,4,4,4,2,2,2
+ml_k    fcb     2,2,0,0,0,4,3,4,0,0,2,4,4
 
 * shown: A = x, B = y. NE if that cell goes on the map (REVEAL shows everything, YOUR MAP what's seen).
 shown   pshs    a
@@ -609,7 +771,6 @@ edges   ldx     #grid
 
 * Variables
 vmode   fcb     0
-seen    fill    0,31*31         ; the current level's seen cells
 msfx    fcb     0
 msfy    fcb     0
 msl     fcb     0
@@ -660,3 +821,14 @@ mc1x    fdb     0
 mc1y    fcb     0
 mc2x    fdb     0
 mc2y    fcb     0
+mlcnt   fcb     0               ; monletters
+mlp     fdb     0
+mlq     fdb     0
+mlx     fdb     0
+mly     fcb     0
+mlpn    fcb     0
+mlpt    fcb     0
+mpx     fdb     0
+mpy     fcb     0
+mqx     fdb     0
+mqy     fcb     0

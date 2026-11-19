@@ -223,7 +223,6 @@ paintcmd
 @end    rts
 
 * Variables
-logtxt  fill    0,LOGROWS*LOGW
 logage  fill    0,LOGROWS
 msgcnt  fcb     0
 logdirty fcb    0

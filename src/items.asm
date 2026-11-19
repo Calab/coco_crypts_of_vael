@@ -307,6 +307,16 @@ saything
         lbsr    mbstr
         lbra    mbsend
 
+* saymon: message "<X><monster name><Y>": B = monster kind ("THE " SKELETON " IS IN THE WAY...")
+saymon  pshs    b,y
+        lbsr    mbstart
+        lbsr    mbstr
+        ldb     ,s
+        lbsr    mbmon
+        puls    b,x
+        lbsr    mbstr
+        lbra    mbsend
+
 * ---- the commands ----
 c_get   lbsr    needhand
         lbcs    @ret
@@ -318,7 +328,13 @@ c_get   lbsr    needhand
         ldx     #m_your
         ldy     #m_handfull
         lbra    sayhand
-@free   lda     #2              ; the first item here that fits the words after the hand
+@free   ldd     px              ; an item sharing a square with a monster can't be taken
+        lbsr    monat
+        bne     @clear
+        ldx     #m_the
+        ldy     #m_inway
+        lbra    saymon
+@clear  lda     #2              ; the first item here that fits the words after the hand
         sta     tstart
         ldx     #items
         lda     nitems
@@ -335,7 +351,39 @@ c_get   lbsr    needhand
         leax    ITEMREC,x
         dec     gcnt
         bne     @find
-@none   ldy     #m_nothing
+@none   ldb     pdir            ; is it under the monster ahead? (what monsters carry stays hidden)
+        ldx     #dx1
+        lda     b,x
+        adda    px
+        sta     gax
+        ldx     #dy1
+        lda     b,x
+        adda    py
+        sta     gay
+        ldd     gax
+        lbsr    monat
+        bne     @nada
+        stb     gmk
+        ldx     #items
+        lda     nitems
+        beq     @nada
+        sta     gcnt
+@ahead  stx     gptr
+        ldd     ,x
+        cmpd    gax
+        bne     @na
+        ldb     2,x
+        lbsr    itemmatch
+        bne     @na
+        ldb     gmk
+        ldx     #m_the
+        ldy     #m_guards
+        lbra    saymon
+@na     ldx     gptr
+        leax    ITEMREC,x
+        dec     gcnt
+        bne     @ahead
+@nada   ldy     #m_nothing
         lbra    msg
 @take   ldx     gptr            ; off the floor...
         ldb     2,x
@@ -943,3 +991,6 @@ gkind   fcb     0
 usewhere fcb    0
 prow    fcb     0
 curverb fcb     0               ; the verb being run (for "<VERB> LEFT OR RIGHT?")
+gax     fcb     0               ; GET: the cell ahead (gax, gay together)
+gay     fcb     0
+gmk     fcb     0
