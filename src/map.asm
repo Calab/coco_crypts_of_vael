@@ -1,0 +1,662 @@
+* Overhead maps (the reference's renderMap) and the cells you've seen (its markSeen).
+*
+*   vmode     0 the corridor, 1 YOUR MAP (only what you've seen; the DUNGEON MAP item),
+*             2 FULL MAZE (REVEAL: everything, unseen walls dotted)
+*   markseen  mark the cells you can see now
+*   mapdraw   draw the map on the page being drawn: title on row 0, maze on rows 1-21, legend row 22
+*   seensave / seenload / seenclear   each level's seen cells live in BANKLVL between visits
+*
+* Colours: walls green (unseen ones in 50% dots), ladders the red/green mix as in the corridor (V down,
+* ^ up), you a light blue arrow. Items (blue/green diamonds) and monsters (red letters) come later.
+
+* markseen: as the reference: each open cell straight ahead within the light range, and the cells
+* either side of it
+markseen
+        ldb     pdir
+        ldx     #dx1
+        lda     b,x
+        sta     msfx
+        ldx     #dy1
+        lda     b,x
+        sta     msfy
+        incb
+        andb    #3
+        stb     msr
+        addb    #2
+        andb    #3
+        stb     msl
+        clr     msd
+        lda     px
+        ldb     py
+@cell   std     mscx
+        lbsr    iswall
+        bne     @end
+        ldd     mscx
+        bsr     mark
+        ldb     msl
+        bsr     @side
+        ldb     msr
+        bsr     @side
+        inc     msd
+        lda     msd
+        cmpa    vrange
+        bhi     @end
+        ldd     mscx
+        adda    msfx
+        addb    msfy
+        bra     @cell
+@end    rts
+@side   ldx     #dx1            ; B = direction: mark the neighbour that way
+        lda     b,x
+        adda    mscx
+        pshs    a
+        ldx     #dy1
+        lda     b,x
+        adda    mscy
+        tfr     a,b
+        puls    a
+        bra     mark
+
+* mark: A = x, B = y. Mark that cell seen, if it's inside the maze.
+mark    cmpa    mz_s
+        bhs     @out
+        cmpb    mz_s
+        bhs     @out
+        pshs    a
+        lda     mz_s
+        mul
+        addb    ,s+
+        adca    #0
+        addd    #seen
+        tfr     d,x
+        lda     #1
+        sta     ,x
+@out    rts
+
+* seenslot: X = this level's slot in the level bank (mapped in the bank window; put BANKCOM back after)
+seenslot
+        lda     #BANKLVL
+        sta     MMUT0+6
+        lda     mz_lvl
+        deca
+        lsla                    ; 1K per level
+        lsla
+        clrb
+        addd    #BANKWIN
+        tfr     d,x
+        rts
+
+* seensave: keep the current level's seen cells
+seensave
+        bsr     seenslot
+        ldu     #seen
+        ldy     #31*31
+@copy   lda     ,u+
+        sta     ,x+
+        leay    -1,y
+        bne     @copy
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
+* seenload: bring back the current level's seen cells
+seenload
+        bsr     seenslot
+        ldu     #seen
+        ldy     #31*31
+@copy   lda     ,x+
+        sta     ,u+
+        leay    -1,y
+        bne     @copy
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
+* itemslot: X = this level's item list in the level bank (after the 5 seen areas, 256 bytes each)
+itemslot
+        lda     #BANKLVL
+        sta     MMUT0+6
+        ldb     mz_lvl
+        decb
+        clra
+        exg     a,b             ; (n - 1) * 256
+        addd    #BANKWIN+5*1024
+        tfr     d,x
+        rts
+
+* itemsave / itemload: keep / bring back the current level's items (count, then the records)
+itemsave
+        bsr     itemslot
+        ldu     #nitems
+        ldy     #1+MAXITEMS*ITEMREC
+@copy   lda     ,u+
+        sta     ,x+
+        leay    -1,y
+        bne     @copy
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
+itemload
+        bsr     itemslot
+        ldu     #nitems
+        ldy     #1+MAXITEMS*ITEMREC
+@copy   lda     ,x+
+        sta     ,u+
+        leay    -1,y
+        bne     @copy
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
+* seenclear: a new game: nothing seen on any level
+seenclear
+        lda     #BANKLVL
+        sta     MMUT0+6
+        ldx     #BANKWIN
+        ldd     #0
+@clr    std     ,x++
+        cmpx    #BANKWIN+5*1024
+        blo     @clr
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
+* mapdraw: the whole map screen (rows 0-22) on the page being drawn
+mapdraw lbsr    clrview         ; rows 0-135, then 136-183
+        ldu     #SCRCPU+184*ROWB
+        ldd     #0
+        ldx     #0
+        ldy     #0
+@clr    pshu    d,x,y
+        cmpu    #SCRCPU+VIEWBYTES
+        bhi     @clr
+        lda     mz_lvl          ; this level's geometry
+        deca
+        ldb     #MAPTABW
+        mul
+        addd    #maptab
+        tfr     d,x
+        ldb     1,x
+        stb     mch
+        ldb     2,x
+        stb     mcw
+        ldd     3,x
+        std     mox
+        ldd     5,x
+        std     moy             ; oy, V half-width
+        ldd     7,x
+        std     mvt             ; V top, V bottom
+        ldd     9,x
+        std     mrx             ; arrow x, y
+        ldd     11,x
+        std     mbx             ; arrow back x, y
+        ldd     13,x
+        std     mix             ; item diamond x, y
+        lda     #WALLCOL        ; walls you've seen: solid
+        lbsr    setcol
+        lda     #$FF
+        lbsr    setpat
+        lda     #1
+        sta     mwant
+        lbsr    edges
+        lda     vmode           ; REVEAL: the rest too, dotted
+        cmpa    #2
+        bne     @lad
+        lda     #$AA
+        lbsr    setpat
+        clr     mwant
+        lbsr    edges
+@lad    lda     #$FF
+        lbsr    setpat
+        lda     #LADCOL
+        lbsr    setcol
+        lda     mz_lvl          ; down ladder (levels 1-4): a V
+        cmpa    #5
+        bhs     @up
+        lda     farx
+        ldb     fary
+        lbsr    shown
+        beq     @up
+        clr     mlup
+        lda     farx            ; (shown used A and B)
+        ldb     fary
+        lbsr    vmark
+@up     lda     mz_lvl          ; up ladder (levels 2-5): a ^
+        cmpa    #1
+        beq     @you
+        lda     #1
+        tfr     a,b
+        lbsr    shown
+        beq     @you
+        lda     #1
+        sta     mlup
+        tfr     a,b             ; (1,1)
+        lbsr    vmark
+@you    lda     vmode           ; REVEAL: every item, as a diamond
+        cmpa    #2
+        bne     @arrow
+        lbsr    diamonds
+@arrow  lda     #TXBLUE         ; you: an arrow pointing the way you face
+        lbsr    setcol
+        lbsr    arrow
+        lda     #TXGREEN        ; title
+        sta     textmask
+        lbsr    mbstart
+        ldx     #m_yourmap
+        lda     vmode
+        cmpa    #2
+        bne     @t
+        ldx     #m_fullmap
+@t      lbsr    mbstr
+        clra
+        ldb     mz_lvl
+        lbsr    mbnum
+        ldu     mbp
+        clr     ,u
+        clra
+        ldy     #mbuf
+        lbsr    rowstr
+        lda     #TXBLUE         ; legend
+        sta     textmask
+        ldy     #m_maplegend
+        lda     vmode
+        cmpa    #2
+        beq     @l
+        ldy     #m_mapclose
+@l      lda     #22
+        lbra    rowstr
+
+* diamonds: a diamond on each item's cell (REVEAL), in ITEMCOL
+diamonds
+        lda     #ITEMCOL
+        lbsr    setcol
+        ldx     #items
+        lda     nitems
+        lbeq    @end
+        sta     dloop
+@each   stx     dptr
+        lda     ,x
+        ldb     1,x
+        lbsr    centre
+        ldd     mxc             ; corners: top / bottom at the centre x, left / right at the centre y
+        std     dtx
+        clra
+        ldb     mix
+        addd    mxc
+        std     drx
+        clra
+        ldb     mix
+        pshs    d
+        ldd     mxc
+        subd    ,s++
+        std     dlx
+        lda     myc
+        suba    miy
+        sta     dty
+        lda     myc
+        adda    miy
+        sta     dby
+        ldd     dtx             ; top - right
+        std     <lx0
+        ldx     drx
+        lda     dty
+        ldb     myc
+        bsr     dseg
+        ldd     drx             ; right - bottom
+        std     <lx0
+        ldx     dtx
+        lda     myc
+        ldb     dby
+        bsr     dseg
+        ldd     dtx             ; bottom - left
+        std     <lx0
+        ldx     dlx
+        lda     dby
+        ldb     myc
+        bsr     dseg
+        ldd     dlx             ; left - top
+        std     <lx0
+        ldx     dtx
+        lda     myc
+        ldb     dty
+        bsr     dseg
+        ldx     dptr
+        leax    ITEMREC,x
+        dec     dloop
+        lbne    @each
+@end    rts
+
+* dseg: a line from (lx0, A) to (X, B)
+dseg    stx     <lx1
+        sta     <ly0
+        stb     <ly1
+        lbra    line
+
+* shown: A = x, B = y. NE if that cell goes on the map (REVEAL shows everything, YOUR MAP what's seen).
+shown   pshs    a
+        lda     vmode
+        cmpa    #2
+        puls    a
+        beq     @yes
+        pshs    a
+        lda     mz_s
+        mul
+        addb    ,s+
+        adca    #0
+        addd    #seen
+        tfr     d,x
+        tst     ,x
+        rts
+@yes    lda     #1
+        rts
+
+* centre: A = x, B = y (cell). Sets mxc, myc = the cell's centre in pixels.
+centre  pshs    b
+        ldb     mcw
+        mul
+        addd    mox
+        pshs    d
+        clra
+        ldb     mcw
+        lsrb
+        addd    ,s++
+        std     mxc
+        puls    a
+        ldb     mch
+        mul
+        addb    moy
+        adca    #0
+        pshs    b
+        ldb     mch
+        lsrb
+        addb    ,s+
+        stb     myc
+        rts
+
+* vmark: a ladder mark at A = x, B = y: a V (down), or a ^ if mlup is set
+vmark   bsr     centre
+        lda     myc             ; y of the open ends and the point
+        tst     mlup
+        bne     @upy
+        suba    mvt             ; V: ends above, point below
+        sta     mend
+        lda     myc
+        adda    mvb
+        sta     mtip
+        bra     @draw
+@upy    adda    mvt             ; ^: ends below, point above
+        sta     mend
+        lda     myc
+        suba    mvb
+        sta     mtip
+@draw   clra                    ; left end to the point
+        ldb     mvx
+        pshs    d
+        ldd     mxc
+        subd    ,s++
+        std     <lx0
+        lda     mend
+        sta     <ly0
+        ldd     mxc
+        std     <lx1
+        lda     mtip
+        sta     <ly1
+        lbsr    line
+        ldd     mxc             ; the point to the right end
+        std     <lx0
+        lda     mtip
+        sta     <ly0
+        clra
+        ldb     mvx
+        addd    mxc
+        std     <lx1
+        lda     mend
+        sta     <ly1
+        lbra    line
+
+* arrow: you, as the reference's triangle (outline): the point a little ahead of the centre, the back
+* corners behind it and to the sides
+arrow   lda     px
+        ldb     py
+        lbsr    centre
+        ldb     pdir
+        ldx     #dx1
+        lda     b,x
+        sta     mdx
+        ldx     #dy1
+        lda     b,x
+        sta     mdy
+        lda     mdx             ; point: (xc + dx*rx, yc + dy*ry)
+        ldb     mrx
+        lbsr    smul
+        addd    mxc
+        std     mtipx
+        lda     mdy
+        ldb     mry
+        lbsr    smul
+        addb    myc
+        stb     mtip
+        lda     mdx             ; back centre: (xc - dx*rx, yc - dy*ry)
+        nega
+        ldb     mrx
+        lbsr    smul
+        addd    mxc
+        std     mbkx
+        lda     mdy
+        nega
+        ldb     mry
+        lbsr    smul
+        addb    myc
+        stb     mbky
+        lda     mdy             ; corners: back centre +/- (dy*bx, -dx*by)
+        ldb     mbx
+        lbsr    smul
+        std     moffx
+        lda     mdx
+        nega
+        ldb     mby
+        lbsr    smul
+        stb     moffy
+        ldd     mbkx            ; corner 1 = back + off
+        addd    moffx
+        std     mc1x
+        lda     mbky
+        adda    moffy
+        sta     mc1y
+        ldd     mbkx            ; corner 2 = back - off
+        subd    moffx
+        std     mc2x
+        lda     mbky
+        suba    moffy
+        sta     mc2y
+        ldd     mtipx           ; point - corner 1 - corner 2 - point
+        std     <lx0
+        lda     mtip
+        sta     <ly0
+        ldd     mc1x
+        std     <lx1
+        lda     mc1y
+        sta     <ly1
+        lbsr    line
+        ldd     mc1x
+        std     <lx0
+        lda     mc1y
+        sta     <ly0
+        ldd     mc2x
+        std     <lx1
+        lda     mc2y
+        sta     <ly1
+        lbsr    line
+        ldd     mc2x
+        std     <lx0
+        lda     mc2y
+        sta     <ly0
+        ldd     mtipx
+        std     <lx1
+        lda     mtip
+        sta     <ly1
+        lbra    line
+
+* smul: A = -1, 0 or 1, B = 0-255. D = A * B (signed 16-bit).
+smul    tsta
+        beq     @zero
+        bmi     @neg
+        clra
+        rts
+@neg    clra
+        pshs    d
+        ldd     #0
+        subd    ,s++
+        rts
+@zero   clrb
+        rts
+
+* edges: walls around every open cell whose seen-ness matches mwant (1 seen, 0 not), as the
+* reference: a line along each side that has a wall next to it
+edges   ldx     #grid
+        stx     mgp
+        ldx     #seen
+        stx     msp
+        clr     my
+        lda     moy
+        sta     mypix
+@row    clr     mx
+        ldd     mox
+        std     mxpix
+@col    ldx     mgp
+        tst     ,x
+        lbne    @next           ; a wall itself: nothing to draw
+        ldy     msp
+        lda     ,y
+        beq     @unseen
+        lda     #1
+@unseen cmpa    mwant
+        lbne    @next
+        ldb     mz_s            ; above
+        negb
+        tst     b,x
+        beq     @below
+        ldd     mxpix
+        std     <lx0
+        addb    mcw
+        adca    #0
+        std     <lx1
+        lda     mypix
+        sta     <ly0
+        sta     <ly1
+        lbsr    line
+        ldx     mgp
+@below  ldb     mz_s
+        tst     b,x
+        beq     @left
+        ldd     mxpix
+        std     <lx0
+        addb    mcw
+        adca    #0
+        std     <lx1
+        lda     mypix
+        adda    mch
+        sta     <ly0
+        sta     <ly1
+        lbsr    line
+        ldx     mgp
+@left   tst     -1,x
+        beq     @right
+        ldd     mxpix
+        std     <lx0
+        std     <lx1
+        lda     mypix
+        sta     <ly0
+        adda    mch
+        sta     <ly1
+        lbsr    line
+        ldx     mgp
+@right  tst     1,x
+        beq     @next
+        ldd     mxpix
+        addb    mcw
+        adca    #0
+        std     <lx0
+        std     <lx1
+        lda     mypix
+        sta     <ly0
+        adda    mch
+        sta     <ly1
+        lbsr    line
+@next   ldx     mgp
+        leax    1,x
+        stx     mgp
+        ldx     msp
+        leax    1,x
+        stx     msp
+        ldd     mxpix
+        addb    mcw
+        adca    #0
+        std     mxpix
+        inc     mx
+        lda     mx
+        cmpa    mz_s
+        lblo    @col
+        lda     mypix
+        adda    mch
+        sta     mypix
+        inc     my
+        lda     my
+        cmpa    mz_s
+        lblo    @row
+        rts
+
+* Variables
+vmode   fcb     0
+seen    fill    0,31*31         ; the current level's seen cells
+msfx    fcb     0
+msfy    fcb     0
+msl     fcb     0
+msr     fcb     0
+msd     fcb     0
+mscx    fcb     0               ; mscx, mscy together
+mscy    fcb     0
+mch     fcb     0
+mcw     fcb     0
+mox     fdb     0
+moy     fcb     0               ; moy, mvx together
+mvx     fcb     0
+mvt     fcb     0               ; mvt, mvb together
+mvb     fcb     0
+mrx     fcb     0               ; mrx, mry together
+mry     fcb     0
+mbx     fcb     0               ; mbx, mby together
+mby     fcb     0
+mix     fcb     0               ; mix, miy together: item diamond size
+miy     fcb     0
+dloop   fcb     0
+dptr    fdb     0
+dtx     fdb     0               ; diamond corners
+drx     fdb     0
+dlx     fdb     0
+dty     fcb     0
+dby     fcb     0
+mwant   fcb     0
+mgp     fdb     0
+msp     fdb     0
+mx      fcb     0
+my      fcb     0
+mxpix   fdb     0
+mypix   fcb     0
+mxc     fdb     0
+myc     fcb     0
+mlup    fcb     0
+mend    fcb     0
+mtip    fcb     0
+mtipx   fdb     0
+mdx     fcb     0
+mdy     fcb     0
+mbkx    fdb     0
+mbky    fcb     0
+moffx   fdb     0
+moffy   fcb     0
+mc1x    fdb     0
+mc1y    fcb     0
+mc2x    fdb     0
+mc2y    fcb     0

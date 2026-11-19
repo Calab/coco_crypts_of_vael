@@ -39,8 +39,9 @@ editkey cmpa    #KCR
 @enter  ldb     ilen            ; the line, zero-terminated
         ldx     #iline
         clr     b,x
-        tst     gmode
-        beq     @run            ; on the title an empty line means a random seed
+        lda     gmode
+        cmpa    #1
+        bne     @run            ; on the title an empty line means a random seed; after the end, nothing
         tstb
         bne     @keep
         ldx     #lastcmd        ; empty: repeat the last command
@@ -57,9 +58,56 @@ editkey cmpa    #KCR
 @run    clr     ilen
         lda     #1
         sta     cmddirty
-        tst     gmode
+        lda     gmode
         lbeq    titlecmd
+        cmpa    #2
+        lbeq    overcmd
         lbra    docmd
+
+* overcmd: after the game ends only RESTART (or QUIT) does anything, as the reference
+overcmd lbsr    tokenize
+        tst     ntok
+        beq     @ret
+        clra
+        ldu     #w_restart
+        lbsr    tokfull
+        beq     @title
+        clra
+        ldu     #w_quit
+        lbsr    tokfull
+        beq     @title
+        ldy     #m_over
+        lbra    msg
+@title  lbra    title
+@ret    rts
+
+* tokfull: A = token number, U = word. EQ if the token is exactly that word.
+tokfull lbsr    tokget
+        tstb
+        beq     @no
+@c      lda     ,u+
+        beq     @no
+        cmpa    ,x+
+        bne     @no
+        decb
+        bne     @c
+        tst     ,u
+        rts
+@no     lda     #1
+        rts
+
+* verbname: A = verb number. X = its word (from the verbs table).
+verbname
+        ldx     #verbs
+@e      tsta
+        beq     @here
+        leax    1,x             ; past the flag, then the word
+@w      tst     ,x+
+        bne     @w
+        deca
+        bra     @e
+@here   leax    1,x
+        rts
 
 * tokenize: split iline into words (tokp = start, tokl = length; ntok = how many)
 tokenize
@@ -277,7 +325,8 @@ docmd   lbsr    tokenize
         bne     @known
         ldy     #m_what
         lbra    msg
-@known  lsla
+@known  sta     curverb
+        lsla
         ldx     #vjump
         jmp     [a,x]
 
@@ -366,8 +415,8 @@ joinargs
 * ---- the commands (V_ numbers are positions in the verbs table) ----
 V_PAUSE equ     13
 
-vjump   fdb     c_move,c_notyet,c_turn,c_notyet,c_notyet,c_notyet,c_notyet,c_notyet
-        fdb     c_notyet,c_look,c_notyet,c_descend,c_ascend,c_pause,c_quit,c_notyet
+vjump   fdb     c_move,c_reveal,c_turn,c_notyet,c_get,c_drop,c_stow,c_pull
+        fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_notyet
         fdb     c_notyet,c_notyet,c_seed,c_monitor,c_notyet,c_xlight,c_xjump,c_xdepth
         fdb     c_xinfo
 
@@ -375,7 +424,23 @@ c_notyet
         ldy     #m_notyet
         lbra    msg
 
-c_look  rts                     ; the reference's LOOK returns to the corridor view from a map
+c_look  tst     vmode           ; LOOK puts a map away (the reference's LOOK)
+        beq     @ret
+        clr     vmode
+        lda     #1
+        sta     vdirty
+        sta     logdirty
+        sta     statdirty
+@ret    rts
+
+c_reveal
+        lda     #2              ; the whole maze (the reference's test view)
+        bra     showmap
+
+showmap sta     vmode
+        lda     #1
+        sta     vdirty
+        rts
 
 c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         ldu     #w_back
@@ -399,20 +464,38 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         lda     #1
         bra     @go
 @fwd    clra                    ; glide forward (A = 0)
-@go     lbsr    step
+@go     sta     mvmode
+        lda     vmode           ; moving puts away the pack view (not a map), as mapSafeView
+        cmpa    #3
+        bne     @go2
+        clr     vmode
+@go2    lda     mvmode
+        lbsr    step
         tsta
         beq     @moved
-        ldy     #m_ouch         ; into a wall (it will hurt once there's health)
+        ldd     #3              ; walking into stone hurts: 2-4 (the reference's rnd(2, 4))
+        lbsr    rndn
+        addd    #2
+        lbsr    hurt
+        bne     @ouch
+        ldy     #m_dash
+        lbra    die
+@ouch   ldy     #m_ouch
         lbra    msg
 @moved  lda     #1
         sta     vdirty
+        lbsr    seehere
         lbsr    ondown
         bne     @ret
         ldy     #m_ladder
         lbra    msg
 @ret    rts
 
-c_turn  lda     #1
+c_turn  lda     vmode           ; turning puts away the pack view (not a map)
+        cmpa    #3
+        bne     @t0
+        clr     vmode
+@t0     lda     #1
         ldu     #w_around
         lbsr    tokis
         beq     @around
@@ -558,14 +641,22 @@ c_monitor
 
 * Test commands (typed in full)
 c_xlight
-        ldx     #lightnext      ; lantern -> torch -> none -> lantern
+        ldx     #lightnext      ; lantern -> torch -> none -> lantern (that burns for 999 s)
         ldb     vlight
         lda     b,x
-        sta     vlight
         bne     @lit
-        inca                    ; no light: you still see your own cell
-@lit    sta     vrange
-        lda     #1
+        lbsr    lightoff
+        bra     @set
+@lit    sta     vlight
+        ldb     #K_TORCH
+        cmpa    #4
+        beq     @k
+        ldb     #K_LANTERN
+@k      stb     lkind
+        ldd     #999
+        std     lrem
+        lbsr    lightrange
+@set    lda     #1
         sta     vdirty
         ldy     #m_lant
         lda     vlight
@@ -624,6 +715,65 @@ c_xinfo lbsr    mbstart         ; AT x,y FACING dir. DRAW n/60 SEC.
         ldx     #m_sixty
         lbsr    mbstr
         lbra    mbsend
+
+* seehere: "YOU SEE A DAGGER, AN OIL LANTERN HERE." for the items where you stand (the reference's move)
+seehere ldx     #items
+        lda     nitems
+        beq     @ret
+        sta     shl
+        clr     shn
+@each   ldd     ,x
+        cmpd    px
+        bne     @skip
+        pshs    x
+        tst     shn             ; the first: start the message; later ones: a comma first
+        bne     @more
+        lbsr    mbstart
+        ldx     #m_yousee
+        lbsr    mbstr
+        bra     @name
+@more   ldx     #m_listsep
+        lbsr    mbstr
+@name   inc     shn
+        ldx     ,s
+        ldb     2,x
+        lbsr    aname
+        puls    x
+@skip   leax    ITEMREC,x
+        dec     shl
+        bne     @each
+        tst     shn
+        beq     @ret
+        ldx     #m_here
+        lbsr    mbstr
+        lbra    mbsend
+@ret    rts
+
+* aname: B = item kind. Adds "A name" or "AN name" (before a vowel) to the message being built.
+aname   andb    #$7F
+        lslb
+        ldx     #inames
+        ldx     b,x
+        lda     ,x
+        pshs    x
+        ldx     #m_an
+        cmpa    #'A
+        beq     @art
+        cmpa    #'E
+        beq     @art
+        cmpa    #'I
+        beq     @art
+        cmpa    #'O
+        beq     @art
+        cmpa    #'U
+        beq     @art
+        ldx     #m_a
+@art    lbsr    mbstr
+        puls    x
+        lbra    mbstr
+
+shl     fcb     0
+shn     fcb     0
 
 * ondown / onup: EQ if you're standing on the down ladder (levels 1-4) / up ladder (levels 2-5)
 ondown  lda     mz_lvl
@@ -764,8 +914,9 @@ newseed fqb     0               ; the seed being asked about
 pseed   fqb     0               ; parseseed's result
 paused  fcb     0
 vdirty  fcb     0               ; the view needs redrawing
-gmode   fcb     0               ; 0 title, 1 playing
+gmode   fcb     0               ; 0 title, 1 playing, 2 the game is over
 spin    fdb     0               ; counts while waiting for keys (randomness for a blank seed)
+mvmode  fcb     0               ; c_move: glide forward / back / sideways
 
 * overlay: the Y/N question in the middle of the view, drawn on the page being drawn after the view
 * (the reference's dark box with the question and its two answers)

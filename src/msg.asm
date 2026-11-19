@@ -1,8 +1,8 @@
 * Messages and the text rows under the view.
 *
-*   rows 17-21  message log: the last 5 lines, word-wrapped to 40 columns. Lines from the latest two
+*   rows 17-20  message log: the last 4 lines, word-wrapped to 40 columns. Lines from the latest two
 *               messages are green, older ones light blue (the reference dims all but the last two).
-*   row 22      status line
+*   rows 21-22  status: the hands, then health (paintstat, in items.asm)
 *   row 23      command line
 *
 * Text rows are drawn on both screen pages (they don't change when the view flips). Changes only
@@ -13,8 +13,9 @@
 *   paintdirty   redraw the dirty text rows on both pages
 
 LOGTOP  equ     17
-LOGROWS equ     5
-STATROW equ     22
+LOGROWS equ     4
+HANDROW equ     21              ; what's in each hand
+STATROW equ     22              ; health
 CMDROW  equ     23
 LOGW    equ     41              ; bytes per log line (40 + terminator)
 
@@ -133,11 +134,21 @@ paintdirty
         bsr     @page
         puls    a
         lbsr    mappage
+        clr     cmddirty
+        lda     vmode
+        cmpa    #1
+        beq     @none
+        cmpa    #2
+        beq     @none
         clr     logdirty
         clr     statdirty
-        clr     cmddirty
 @none   rts
 @page   lbsr    mappage
+        lda     vmode           ; a map covers the log and status rows: they wait until it closes
+        cmpa    #1
+        beq     @nostat
+        cmpa    #2
+        beq     @nostat
         tst     logdirty
         beq     @nolog
         lbsr    paintlog
@@ -169,17 +180,6 @@ paintlog
         cmpa    #LOGTOP+LOGROWS
         blo     @row
         rts
-
-* paintstat: the status line. Empty for now (depth and seed show on PAUSE instead); kept for what
-* the reference shows there later (hands, health).
-paintstat
-        ldx     #sbuf
-        clr     ,x
-        lda     #TXGREEN
-        sta     textmask
-        lda     #STATROW
-        ldy     #sbuf
-        lbra    rowstr
 
 * strcpy: copy the zero-terminated string at X to U (without the terminator). U advances.
 strcpy  lda     ,x+

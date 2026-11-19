@@ -213,7 +213,8 @@ contents
         lda     #1
         ldb     lbase
         lbsr    ladder
-@next   lda     ci
+@next   lbsr    cellitems       ; items on the floor
+        lda     ci
         bra     @cell
 @end    rts
 
@@ -309,6 +310,150 @@ ladder  sta     lup
         rts
 @plus   clra                    ; D = 320 + B
         addd    #320
+        rts
+
+* cellitems: the items in cell (tcx, tcy), as the reference: on the floor at depth d + 0.45,
+* side by side if there are several, in ITEMCOL, shaded like the cell (pattern already set).
+cellitems
+        clr     icnt            ; how many are here?
+        ldx     #items
+        lda     nitems
+        lbeq    @none
+        sta     iloop
+@count  ldd     ,x
+        cmpd    tcx
+        bne     @nc
+        inc     icnt
+@nc     leax    ITEMREC,x
+        dec     iloop
+        bne     @count
+        lda     icnt
+        lbeq    @none
+        ldb     lbase           ; this depth's floor y, scales and spacing
+        addb    #2
+        lda     #ITABROW
+        mul
+        addd    #itab
+        tfr     d,x
+        tst     ,x
+        beq     @none           ; too close (gliding past)
+        lda     1,x
+        sta     icy
+        lda     2,x
+        sta     isx
+        lda     3,x
+        sta     isy
+        lda     4,x
+        sta     ihalf
+        lda     #ITEMCOL
+        lbsr    setcol
+        clr     ij              ; j-th item here
+        ldx     #items
+        stx     iptr2
+        lda     nitems
+        sta     iloop
+@each   ldx     iptr2
+        ldd     ,x
+        cmpd    tcx
+        bne     @skip
+        lda     ij              ; centre x = 320 + (2j - n + 1) * half spacing
+        lsla
+        suba    icnt
+        inca
+        ldb     ihalf
+        tsta
+        bpl     @pos
+        nega
+        mul
+        pshs    d
+        ldd     #320
+        subd    ,s++
+        bra     @cx
+@pos    mul
+        addd    #320
+@cx     std     icx
+        ldx     iptr2
+        ldb     2,x
+        andb    #$7F            ; (the top bit is the item's XP flag)
+        lbsr    drawicon
+        inc     ij
+@skip   ldx     iptr2
+        leax    ITEMREC,x
+        stx     iptr2
+        dec     iloop
+        bne     @each
+@none   rts
+
+* drawicon: B = item kind. Draws its icon centred at icx with its floor at icy, scaled by isx, isy
+* (pixels per 1/100 unit, times 256). Lines go through dline, so they're clipped during a pan.
+drawicon
+        ldx     #icons
+        lslb
+        ldx     b,x
+        lda     ,x+
+        sta     inp
+@poly   lda     ,x+
+        sta     inpt
+        bsr     ipoint          ; first point
+        ldd     ipx
+        std     iqx
+        lda     ipy
+        sta     iqy
+        dec     inpt
+@pt     bsr     ipoint
+        stx     iptr
+        ldd     iqx
+        std     <lx0
+        lda     iqy
+        sta     <ly0
+        ldd     ipx
+        std     <lx1
+        std     iqx
+        lda     ipy
+        sta     <ly1
+        sta     iqy
+        lbsr    dline
+        ldx     iptr
+        dec     inpt
+        bne     @pt
+        dec     inp
+        bne     @poly
+        rts
+
+* ipoint: X = an icon point (x, y in 1/100 units). Sets ipx, ipy on screen; X moves past it.
+ipoint  lda     ,x+
+        bpl     @xp
+        nega
+        ldb     isx
+        mul
+        tfr     a,b
+        clra
+        pshs    d
+        ldd     icx
+        subd    ,s++
+        bra     @xs
+@xp     ldb     isx
+        mul
+        tfr     a,b
+        clra
+        addd    icx
+@xs     std     ipx
+        lda     ,x+
+        bpl     @yp
+        nega                    ; a little below the floor
+        ldb     isy
+        mul
+        adda    icy
+        cmpa    #VIEWH-1
+        bls     @ys
+        lda     #VIEWH-1
+        bra     @ys
+@yp     ldb     isy
+        mul
+        pshs    a
+        lda     icy
+        suba    ,s+
+@ys     sta     ipy
         rts
 
 * cellpat: B = depth in thirds. Sets the dot pattern for that depth and the current light.
@@ -410,15 +555,27 @@ side    sta     sside
 
 * View variables
         ifndef  STARTLIGHT
-STARTLIGHT equ  7
+STARTLIGHT equ  0               ; timing walk only: its light (the game starts dark, as the reference)
         endc
-vlight  fcb     STARTLIGHT      ; light carried: 7 lantern, 4 torch, 0 none (test key T cycles)
-        ifeq    STARTLIGHT
-vrange  fcb     1               ; no light: you still see your own cell
-        else
-vrange  fcb     STARTLIGHT      ; light range in cells
-        endc
+vlight  fcb     0               ; the burning light's full range: 7 lantern, 4 torch, 0 none
+vrange  fcb     1               ; how far you see now (lightRange; at least your own cell)
 lbase   fcb     0               ; contents: cell's near edge in thirds (signed)
+icnt    fcb     0               ; cellitems: items in this cell
+iloop   fcb     0
+ij      fcb     0
+iptr2   fdb     0
+icx     fdb     0               ; drawicon: centre x, floor y, scales
+icy     fcb     0
+isx     fcb     0
+isy     fcb     0
+ihalf   fcb     0
+inp     fcb     0
+inpt    fcb     0
+iptr    fdb     0
+ipx     fdb     0
+ipy     fcb     0
+iqx     fdb     0
+iqy     fcb     0
 lup     fcb     0               ; ladder: 0 down, 1 up
 lptr    fdb     0
 lady    fcb     0,0,0,0,0       ; ladder y at its 5 positions

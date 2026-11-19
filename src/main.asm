@@ -28,6 +28,9 @@ WALLCOL equ     TXGREEN
         ifndef  LADCOL
 LADCOL  equ     $A5             ; red, red, green, green: reads as an olive-gold "yellow"
         endc
+        ifndef  ITEMCOL
+ITEMCOL equ     TXBLUE          ; solid light blue (the blue/green mix was tried and didn't read well)
+        endc
 
 * Two screen pages: draw on the hidden one, then show it.
 PAGE0BLK equ    SCR0BLK         ; physical blocks $30-$33
@@ -38,18 +41,29 @@ PAGE1BLK equ    SCR0BLK+4       ; physical blocks $34-$37
 *   $0D00-$0DFF  direct page variables                                $38
 *   $0E00-$3FFF  fixed code and data (must end below $4000)           $38-$39
 *   $4000-$BFFF  the screen page being drawn                          $30-$33 or $34-$37
-*   $C000-$DFFF  bank window: BANKCOM normally, BANKSCR while a level is built
-*   $E000-$FFFF  unchanged ($FExx vectors, $FFxx I/O)                 $3F
+*   $C000-$DFFF  bank window: BANKCOM normally, BANKSCR while a level is built, BANKLVL briefly
+*   $E000-$FBFF  high code: copied here by start from where LOADM put it ($6000, block $3B)  $3F
+*   $FC00-$FFFF  unchanged ($FExx vectors, $FFxx I/O)                 $3F
 * The common bank is assembled at $C000 but stored in the .bin at $4000 (tools/relocate.py), where
 * LOADM puts it in block $3A; start maps that block into the bank window.
 BANKWIN equ     $C000
+HIGHWIN equ     $E000           ; high code runs here...
+HIGHLOAD equ    $6000           ; ...and is loaded here (tools/relocate.py)
 BANKCOM equ     $3A             ; common bank: font, tables (loaded with the program)
 BANKSCR equ     $3C             ; scratch bank: maze-building buffers (not loaded)
+BANKLVL equ     $3B             ; level bank: each level's seen cells, 1K per level (not loaded)
         setdp   $0D
 
         org     $0E00
 
 start   orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
+        sta     $FFDF           ; all-RAM mode (BASIC already runs this way; make sure)
+        ldx     #HIGHLOAD       ; copy the high code up to $E000 before anything remaps $6000
+        ldu     #HIGHWIN
+@high   ldd     ,x++
+        std     ,u++
+        cmpu    #highend
+        blo     @high
         lda     #BANKCOM        ; the common bank, loaded at $4000, into the bank window
         sta     MMUT0+6
         lds     #$0D00
@@ -72,7 +86,8 @@ start   orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
 
         ifdef   MAZETEST
 * Maze check build: generate levels 1-5 for SEEDVAL and leave the results in screen memory
-* (level n's grid at SCRCPU+(n-1)*1024; S, farx, fary, fardist at SCRCPU+5120+(n-1)*8)
+* (level n's grid at SCRCPU+(n-1)*1024; S, farx, fary, fardist at SCRCPU+5120+(n-1)*8; items
+* at SCRCPU+6144+(n-1)*256: count, then x, y, kind each)
 * for tools/mazecheck.py to read from a snapshot.
         lda     #1
 @mt     sta     mtlvl
@@ -105,7 +120,28 @@ start   orcc    #$50            ; IRQ and FIRQ off: we own the machine from here
         sta     2,x
         ldd     fardist
         std     3,x
-        lda     mtlvl
+        ldb     mtlvl           ; items: count, then x, y, kind each, at SCRCPU+6144+(n-1)*256
+        decb
+        clra
+        tfr     d,u             ; (n-1) * 256
+        exg     a,b
+        addd    #SCRCPU+6144
+        tfr     d,u
+        lda     nitems
+        sta     ,u+
+        ldx     #items
+        ldb     nitems
+        beq     @itd
+@it     lda     ,x
+        sta     ,u+
+        lda     1,x
+        sta     ,u+
+        lda     2,x
+        sta     ,u+
+        leax    ITEMREC,x
+        decb
+        bne     @it
+@itd    lda     mtlvl
         inca
         cmpa    #6
         blo     @mt
@@ -148,6 +184,12 @@ askshown                        ; screenshot point for the question screen
         lbsr    irqinit
         ifdef   AUTOWALK
         lbsr    newgame         ; timing walk: straight into SEEDVAL's maze, no title
+        lda     #STARTLIGHT     ; with this light (7 = a lantern that doesn't run out)
+        beq     walkloop
+        sta     vlight
+        ldd     #9999
+        std     lrem
+        lbsr    lightrange
 walkloop
         lbsr    drawframe
         ldd     frames
@@ -160,6 +202,7 @@ walkdone bra    walkdone        ; timing results in frames, totdraw, maxdraw
         else
         lbsr    title
 mainloop
+        lbsr    gameclock       ; seconds of play: the light burns
         lbsr    paintdirty      ; text rows that changed
         ldd     spin            ; (time spent waiting is the randomness for a blank seed)
         addd    #1
@@ -185,6 +228,7 @@ akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
 
 * title: the static title screen; the command line takes a seed
 title   clr     gmode
+        clr     vmode
         clr     pending
         clr     paused
         clr     ilen
@@ -211,14 +255,34 @@ newgame lda     #1
         clr     pending
         clr     paused
         clr     ilen
+        clr     vmode
         lbsr    clearboth
         lbsr    logclear
+        lbsr    seenclear
+        clr     lvlon
+        ldx     #lvlvis         ; no level visited yet
+        ldb     #5
+@nv     clr     ,x+
+        decb
+        bne     @nv
         lda     #1
         clrb
         lbsr    enterlevel
+        lda     #K_DAGGER       ; a dagger at your feet, as the reference's newGame
+        sta     ikind
+        lda     #1
+        tfr     a,b
+        lbsr    additem
+        lbsr    newplayer
+        ldd     ticks
+        std     lastt
+        lda     #1
+        sta     statdirty
         ldy     #m_descend
         lbsr    msg
         ldy     #m_below
+        lbsr    msg
+        ldy     #m_try
         lbsr    msg
         lbsr    mbstart
         ldx     #m_mazeseed
@@ -249,7 +313,31 @@ clearboth
 * (The maze comes out the same every time from the seed; items and monsters will need keeping.)
 enterlevel
         stb     elmode
-        lbsr    mklevel
+        tst     lvlon           ; keep what you've seen, and the items, on the level you're leaving
+        beq     @first
+        pshs    a
+        lbsr    seensave
+        lbsr    itemsave
+        puls    a
+@first  lbsr    mklevel         ; (its maze is the same every time; its items are placed afresh)
+        lbsr    seenload
+        ldx     #lvlvis         ; been here before? then its items are as you left them
+        ldb     mz_lvl
+        decb
+        tst     b,x
+        beq     @fresh
+        lbsr    itemload
+        bra     @vis
+@fresh  lda     #1
+        sta     b,x
+@vis
+        lda     #1
+        sta     lvlon
+        tst     vmode           ; changing level closes a map (the reference's enterLevel)
+        beq     @start
+        clr     vmode
+        sta     logdirty
+@start
         lda     #1
         sta     px
         sta     py
@@ -355,9 +443,12 @@ jump    lda     mz_lvl
 * turn: A = new direction, B = 1 turning right or -1 left. Draws the halfway pan frame; the
 * caller's normal frame then shows the full turn.
 turn    sta     tdir1
+        tst     vmode           ; on a map: no pan, just turn
+        bne     @set
         stb     vturn
         lbsr    drawframe
         lda     tdir1
+@set
         sta     pdir
         clr     vturn
         rts
@@ -381,10 +472,13 @@ step    sta     stmode
         lbsr    iswall
         bne     @wall
         lda     stmode
+        tst     vmode           ; on a map: no glide
+        bne     @inst
+        tsta
         beq     @fwd
         cmpa    #1
         beq     @back
-        bsr     @arrive         ; sideways
+@inst   bsr     @arrive         ; sideways (or on a map)
         clra
         rts
 @fwd    lda     #1              ; forward: from here, 1/3 then 2/3 of the way
@@ -455,8 +549,27 @@ drawframe
         lbsr    mappage
         ldd     ticks
         std     t0
-        lbsr    render
-        ldd     ticks
+        lda     vshift          ; not mid-glide or mid-turn: note what you can see
+        ora     vturn
+        bne     @nomark
+        lbsr    markseen
+@nomark lda     vmode           ; the corridor, a map or the pack view
+        beq     @view
+        cmpa    #3
+        beq     @pack
+        lbsr    mapdraw
+        bra     @drawn
+@pack   lbsr    packview
+        bra     @drawn
+@view   lbsr    render
+        tst     vlight          ; no light: the reference's "IT IS DARK" at the top of the view
+        bne     @drawn
+        lda     #TXGREEN
+        sta     textmask
+        lda     #1
+        ldy     #m_dark
+        lbsr    center
+@drawn  ldd     ticks
         subd    t0
         std     lastdraw
         lda     pending         ; a Y/N question, or PAUSED, goes over the middle of the view
@@ -565,10 +678,8 @@ setpal  pshs    d,x,y,u
         include "kbd.asm"
         include "draw.asm"
         include "view.asm"
-        include "rng.asm"
-        include "maze.asm"
         include "msg.asm"
-        include "cmd.asm"
+        include "items.asm"
         ifdef   FONTTEST
         include "fonttest.asm"
         endc
@@ -616,6 +727,8 @@ ty      fcb     0
 mustfwd fcb     0
 stmode  fcb     0               ; step: 0 glide forward, 1 glide back, 2 sideways
 elmode  fcb     0               ; enterlevel: 0 arrive at the start, 1 at the down ladder
+lvlon   fcb     0               ; a level is in play (its seen cells need saving when you leave)
+lvlvis  fcb     0,0,0,0,0       ; levels visited (their items are kept in BANKLVL)
 
 * ---- Buffers: reserved, not stored in the .bin. Must end below $4000 (screen window). ----
 grid    rmb     31*31           ; maze, 1 = wall
@@ -624,11 +737,23 @@ progend
         error   "fixed code and data run past $3FFF into the screen window"
         endc
 
+* ---- High code ($E000-$FBFF, block $3F): loaded at $6000, copied up by start ----
+        org     HIGHWIN
+        include "rng.asm"
+        include "maze.asm"
+        include "cmd.asm"
+        include "map.asm"
+highend
+        ifgt    highend-$FC00
+        error   "high code is past $FBFF (its load copy must end below $7C00)"
+        endc
+
 * ---- Common bank (block BANKCOM at $C000-$DFFF): font and tables ----
         org     BANKWIN
         include "font.asm"
         include "tables.asm"
         include "strings.asm"
+        include "icons.asm"
 bankcomend
         ifgt    bankcomend-(BANKWIN+$2000)
         error   "common bank is over 8K"
@@ -638,5 +763,7 @@ bankcomend
 dist    equ     BANKWIN         ; distances from the start, -1 = unreached (2*31*31)
 queue   equ     dist+2*31*31    ; BFS queue of cell indices (2*31*31)
 cstack  equ     queue+2*31*31   ; carve's (x, y) stack (2*256)
+used    equ     cstack+2*256    ; item placement: cells already taken (31*31)
+dist2   equ     used+31*31      ; showcase: the distances from the start, kept (2*31*31)
 
         end     start

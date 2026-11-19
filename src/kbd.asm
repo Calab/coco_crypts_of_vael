@@ -101,14 +101,28 @@ kbput   ldb     kbhead
 * getkey: A = next character, or 0 (and EQ) if none is waiting.
 getkey
         ifdef   AUTOKEYS
-        ldx     akeyp           ; testing: type the script instead ('/' = ENTER), stop at its end
+        ldd     akwait          ; testing: type the script instead ('/' = ENTER, '~' = wait a
+        beq     @next           ; second of game time), stop at its end
+        cmpd    ticks
+        bhi     @none
+        clr     akwait
+        clr     akwait+1
+@next   ldx     akeyp
         lda     ,x+
         lbeq    walkdone
         stx     akeyp
-        cmpa    #'/
+        cmpa    #'~
+        bne     @nw
+        ldd     ticks
+        addd    #60
+        std     akwait
+@none   clra
+        rts
+@nw     cmpa    #'/
         bne     @key
         lda     #KCR
 @key    rts
+akwait  fdb     0
         else
         ldb     kbtail
         cmpb    kbhead

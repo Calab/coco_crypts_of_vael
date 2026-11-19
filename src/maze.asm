@@ -49,7 +49,8 @@ mklevel ldb     #BANKSCR
         ldd     mz_s16
         addd    #1              ; start cell (1,1)
         lbsr    bfs
-        lbra    findfar
+        lbsr    findfar
+        lbra    placeitems
 
 * cellad: A = x, B = y. Returns X = address of that grid cell. Uses D.
 cellad  pshs    a
@@ -286,6 +287,274 @@ findfar ldx     #dist
 @done   stb     farx
         rts
 
+* ---- items: the reference's buildLevel after the far cell ----
+* placeitems: used = {start, far}; on seed 0's level 1 the showcase cells; then the level's own items
+* (each at least 3 steps from the start: free(3)) and 4 + n fillers (free(2), then pick(FILLER)).
+* Fills items/nitems (x, y, kind, light time left (2)).
+placeitems
+        clr     nitems
+        ldx     #used           ; nothing used yet
+        ldy     mz_n
+@clr    clr     ,x+
+        leay    -1,y
+        bne     @clr
+        lda     #1
+        ldx     #used           ; the start and the far cell
+        ldd     mz_s16
+        addd    #1
+        leax    d,x
+        lda     #1
+        sta     ,x
+        ldx     #used
+        ldd     far
+        leax    d,x
+        lda     #1
+        sta     ,x
+        ldx     #showc          ; no showcase monsters
+        ldb     #14
+        lda     #$FF
+@shc    sta     ,x+
+        decb
+        bne     @shc
+        lda     mz_lvl          ; seed 0, level 1: the showcase
+        cmpa    #1
+        bne     @own
+        ldd     seed
+        bne     @own
+        ldd     seed+2
+        bne     @own
+        lbsr    showcase
+@own    ldb     mz_lvl          ; the level's own items
+        decb
+        lslb
+        ldx     #lvitems
+        ldx     b,x
+        stx     pip
+@next   ldx     pip
+        lda     ,x+
+        stx     pip
+        cmpa    #$FF
+        beq     @fill
+        sta     ikind
+        lda     #3
+        lbsr    ifree
+        bcs     @next
+        lbsr    additem
+        bra     @next
+@fill   lda     mz_lvl          ; 4 + n fillers
+        adda    #4
+        sta     pcnt
+@fl     lda     #2
+        lbsr    ifree
+        bcs     @fnext
+        std     pxy
+        ldd     #10             ; pick(FILLER)
+        lbsr    rndn
+        ldx     #filler
+        lda     b,x
+        sta     ikind
+        ldd     pxy
+        lbsr    additem
+@fnext  dec     pcnt
+        bne     @fl
+        rts
+
+* additem: A = x, B = y, ikind = kind. Adds it to the level's items (lights start with full time).
+additem pshs    d
+        lda     nitems
+        cmpa    #MAXITEMS
+        bhs     @full
+        ldb     #ITEMREC
+        mul
+        addd    #items
+        tfr     d,x
+        puls    d
+        std     ,x
+        lda     ikind
+        sta     2,x
+        ldu     #0
+        ldb     ikind
+        cmpb    #K_TORCH
+        bne     @lant
+        ldu     #200            ; seconds of light (the reference's dur)
+@lant   cmpb    #K_LANTERN
+        bne     @t
+        ldu     #420
+@t      stu     3,x
+        inc     nitems
+        rts
+@full   puls    d,pc
+
+* ifree: A = minimum distance from the start. The reference's free(minD): up to 5000 random cells,
+* the first open one that far away and not used yet. Returns A = x, B = y and C clear, or C set.
+ifree   sta     fmin
+        ldd     #5000
+        std     ftry
+@try    ldd     mz_n
+        lbsr    rndn            ; rnd(0, S*S - 1)
+        std     fi
+        lslb
+        rola
+        addd    #dist
+        tfr     d,x
+        ldd     ,x
+        bmi     @no             ; a wall, or out of reach
+        tsta
+        bne     @far
+        cmpb    fmin
+        blo     @no
+@far    ldd     fi
+        addd    #used
+        tfr     d,x
+        tst     ,x
+        bne     @no
+        inc     ,x
+        ldd     fi              ; x, y = i % S, i / S
+        clr     fy
+@div    cmpd    mz_s16
+        blo     @dd
+        subd    mz_s16
+        inc     fy
+        bra     @div
+@dd     tfr     b,a
+        ldb     fy
+        andcc   #$FE
+        rts
+@no     ldd     ftry
+        subd    #1
+        std     ftry
+        bne     @try
+        orcc    #1
+        rts
+
+* showcase: seed 0's level 1 lines one sleeping monster of each kind along the path to the ladder,
+* at path steps 3, 5, ... 15 (the reference's showcase). Needs the distances from the far cell, so
+* dist is kept in dist2 meanwhile.
+showcase
+        ldx     #dist           ; keep the distances from the start
+        ldu     #dist2
+        ldy     mz_n
+@save   ldd     ,x++
+        std     ,u++
+        leay    -1,y
+        bne     @save
+        ldd     far
+        lbsr    bfs             ; dist = steps to the far cell
+        lda     #1
+        sta     scx
+        sta     scy
+        clr     sstep
+@walk   lda     scx             ; tf = steps left from here; stop at the far cell
+        ldb     scy
+        lbsr    cellidx
+        std     sidx
+        lslb
+        rola
+        addd    #dist
+        tfr     d,x
+        ldd     ,x
+        lble    @done
+        subd    #1
+        std     stf             ; the next cell on the path has tf - 1
+        lda     sstep           ; steps 3, 5, ... 15: a showcase cell
+        cmpa    #3
+        blo     @step
+        cmpa    #15
+        bhi     @step
+        bita    #1
+        beq     @step
+        suba    #3              ; slot (step - 3) / 2, 2 bytes each: (step - 3)
+        ldx     #showc
+        ldb     scx
+        stb     a,x
+        inca
+        ldb     scy
+        stb     a,x
+        ldd     sidx
+        addd    #used
+        tfr     d,x
+        lda     #1
+        sta     ,x
+@step   inc     sstep
+        clr     sd
+@dir    ldb     sd              ; the first direction (N, E, S, W) that goes one step closer
+        ldx     #dx1
+        lda     scx
+        adda    b,x
+        sta     snx
+        ldx     #dy1
+        lda     scy
+        adda    b,x
+        tfr     a,b
+        lda     snx
+        lbsr    cellidx
+        lslb
+        rola
+        addd    #dist
+        tfr     d,x
+        ldd     ,x
+        cmpd    stf
+        beq     @go
+        inc     sd
+        lda     sd
+        cmpa    #4
+        blo     @dir
+        bra     @done           ; (can't happen on a real path)
+@go     ldb     sd
+        ldx     #dx1
+        lda     scx
+        adda    b,x
+        sta     scx
+        ldx     #dy1
+        lda     scy
+        adda    b,x
+        sta     scy
+        lbra    @walk
+@done   ldx     #dist2          ; put back the distances from the start
+        ldu     #dist
+        ldy     mz_n
+@back   ldd     ,x++
+        std     ,u++
+        leay    -1,y
+        bne     @back
+        rts
+
+* cellidx: A = x, B = y. D = y * S + x.
+cellidx pshs    a
+        lda     mz_s
+        mul
+        addb    ,s+
+        adca    #0
+        rts
+
+* Item kinds (the reference's ITEMS order)
+K_DAGGER  equ   0
+K_AXE     equ   1
+K_SWORD   equ   2
+K_HAMMER  equ   3
+K_RUNE    equ   4
+K_BUCKLER equ   5
+K_TOWER   equ   6
+K_TORCH   equ   7
+K_LANTERN equ   8
+K_MENDING equ   9
+K_HERB    equ   10
+K_VIGOR   equ   11
+K_MAP     equ   12
+K_RELIC   equ   13
+K_CROWN   equ   14
+MAXITEMS  equ   48              ; per level
+ITEMREC   equ   5               ; x, y, kind, light time left (2)
+
+* LEVELS[n].items and FILLER, as kind numbers
+lvitems fdb     lvi1,lvi2,lvi3,lvi4,lvi5
+lvi1    fcb     K_AXE,K_BUCKLER,K_TORCH,K_TORCH,K_MENDING,K_RELIC,$FF
+lvi2    fcb     K_SWORD,K_TORCH,K_LANTERN,K_MENDING,K_VIGOR,K_RELIC,$FF
+lvi3    fcb     K_HAMMER,K_TOWER,K_LANTERN,K_MENDING,K_MENDING,K_RELIC,$FF
+lvi4    fcb     K_RUNE,K_LANTERN,K_MENDING,K_VIGOR,K_RELIC,$FF
+lvi5    fcb     K_LANTERN,K_MENDING,K_MENDING,K_RELIC,$FF
+filler  fcb     K_HERB,K_HERB,K_HERB,K_TORCH,K_TORCH,K_MENDING,K_LANTERN,K_BUCKLER,K_AXE,K_DAGGER
+
 dx1     fcb     0,1,0,-1
 dy1     fcb     -1,0,1,0
 dx2     fcb     0,2,0,-2
@@ -320,3 +589,23 @@ bnd     fdb     0
 bj      fdb     0
 qhead   fdb     0
 qtail   fdb     0
+
+* Item placement variables, and the current level's items
+pip     fdb     0
+pcnt    fcb     0
+pxy     fdb     0
+ikind   fcb     0
+fmin    fcb     0
+ftry    fdb     0
+fi      fdb     0
+fy      fcb     0
+scx     fcb     0
+scy     fcb     0
+snx     fcb     0
+sstep   fcb     0
+sd      fcb     0
+sidx    fdb     0
+stf     fdb     0
+showc   fill    $FF,14          ; seed 0's showcase cells (x, y) for the 7 monsters; $FF = none
+nitems  fcb     0
+items   fill    0,MAXITEMS*ITEMREC
