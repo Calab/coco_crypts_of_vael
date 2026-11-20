@@ -199,14 +199,7 @@ seenclear
         rts
 
 * mapdraw: the whole map screen (rows 0-22) on the page being drawn
-mapdraw lbsr    clrview         ; rows 0-135, then 136-183
-        ldu     #SCRCPU+184*ROWB
-        ldd     #0
-        ldx     #0
-        ldy     #0
-@clr    pshu    d,x,y
-        cmpu    #SCRCPU+VIEWBYTES
-        bhi     @clr
+mapdraw lbsr    clrfull
         lda     mz_lvl          ; this level's geometry
         deca
         ldb     #MAPTABW
@@ -860,3 +853,14 @@ mpx     fdb     0
 mpy     fcb     0
 mqx     fdb     0
 mqy     fcb     0
+
+* clrfull: clear rows 0-183 (everything above the command line): the view, then the text rows
+clrfull lbsr    clrview
+        ldu     #SCRCPU+184*ROWB
+        ldd     #0
+        ldx     #0
+        ldy     #0
+@clr    pshu    d,x,y
+        cmpu    #SCRCPU+VIEWBYTES
+        bhi     @clr
+        rts

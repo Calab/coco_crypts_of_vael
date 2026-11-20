@@ -1079,11 +1079,11 @@ heartbeat
         lda     paused
         ora     pending
         bne     @ret
-        lda     vmode           ; a map covers the status row
-        cmpa    #1
-        beq     @ret
-        cmpa    #2
-        beq     @ret
+        lda     vmode           ; a map or the help covers the status row
+        beq     @shown
+        cmpa    #3
+        bne     @ret
+@shown
         tst     hbbig           ; the end of a beat
         beq     @due
         ldd     ticks

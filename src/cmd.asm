@@ -439,7 +439,7 @@ V_EXAMINE equ   10
 
 vjump   fdb     c_move,c_reveal,c_turn,c_attack,c_get,c_drop,c_stow,c_pull
         fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_sleep
-        fdb     c_notyet,c_sound,c_seed,c_monitor,c_xxx,c_xlight,c_xjump,c_xdepth
+        fdb     c_help,c_sound,c_seed,c_monitor,c_xxx,c_xlight,c_xjump,c_xdepth
         fdb     c_xinfo
 
 c_notyet
@@ -487,10 +487,13 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         bra     @go
 @fwd    clra                    ; glide forward (A = 0)
 @go     sta     mvmode
-        lda     vmode           ; moving puts away the pack view (not a map), as mapSafeView
-        cmpa    #3
-        bne     @go2
+        lda     vmode           ; moving puts away the pack view and the help (not a map), as
+        cmpa    #3              ; mapSafeView
+        blo     @go2
         clr     vmode
+        lda     #1              ; (the help covered the log and status rows)
+        sta     logdirty
+        sta     statdirty
 @go2    lda     mvmode
         lbsr    step
         tsta
@@ -529,10 +532,13 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         lbra    msg
 @ret    rts
 
-c_turn  lda     vmode           ; turning puts away the pack view (not a map)
+c_turn  lda     vmode           ; turning puts away the pack view and the help (not a map)
         cmpa    #3
-        bne     @t0
+        blo     @t0
         clr     vmode
+        lda     #1
+        sta     logdirty
+        sta     statdirty
 @t0     lda     #1
         ldu     #w_around
         lbsr    tokis

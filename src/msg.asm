@@ -164,20 +164,19 @@ paintdirty
         puls    a
         lbsr    mappage
         clr     cmddirty
-        lda     vmode
-        cmpa    #1
-        beq     @none
-        cmpa    #2
-        beq     @none
-        clr     logdirty
+        lda     vmode           ; (a full-screen view: 1, 2 maps, 4 help)
+        beq     @clr
+        cmpa    #3
+        bne     @none
+@clr    clr     logdirty
         clr     statdirty
 @none   rts
 @page   lbsr    mappage
-        lda     vmode           ; a map covers the log and status rows: they wait until it closes
-        cmpa    #1
-        beq     @nostat
-        cmpa    #2
-        beq     @nostat
+        lda     vmode           ; a map or the help covers the log and status rows: they wait until
+        beq     @show           ; it closes
+        cmpa    #3
+        bne     @nostat
+@show
         tst     logdirty
         beq     @nolog
         lbsr    paintlog

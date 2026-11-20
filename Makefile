@@ -80,9 +80,9 @@ $(BUILD)/data.dat $(BUILD)/data.sym: $(SRC)/data.asm $(SRC)/icons.asm $(SRC)/mon
     $(SRC)/tune.asm $(BUILD)/tunes.asm | $(BUILD)
 	$(LWASM) --6809 --format=raw -I $(SRC) -I $(BUILD) --list=$(BUILD)/data.lst --symbol-dump=$(BUILD)/data.sym -o $(BUILD)/data.dat $(SRC)/data.asm
 
-# Bank $3E's attack pictures (src/fxpics.asm, from tools/mkfx.py)
-$(BUILD)/fx.dat: $(SRC)/fxpics.asm | $(BUILD)
-	$(LWASM) --format=raw -o $@ $(SRC)/fxpics.asm
+# Bank $3E's attack pictures (src/fxpics.asm, from tools/mkfx.py) and HELP text
+$(BUILD)/fx.dat: $(SRC)/bank3e.asm $(SRC)/fxpics.asm $(SRC)/helptext.asm | $(BUILD)
+	$(LWASM) --format=raw -I $(SRC) -o $@ $(SRC)/bank3e.asm
 
 # Bank $3E's sound effects
 $(BUILD)/sndbank.dat: $(SRC)/sndbank.asm $(BUILD)/sfx.asm | $(BUILD)

@@ -356,7 +356,15 @@ title   clr     gmode
         sta     textmask
         ldd     #(8<<8)|13
         ldy     #s_title
-        lbra    printat
+        lbsr    printat
+        lda     #TXBLUE         ; the credits and the version (Steve)
+        sta     textmask
+        lda     #11
+        ldy     #s_credit
+        lbsr    center
+        lda     #13
+        ldy     #s_version
+        lbra    center
 
 * newgame: start a game in the maze for seed
 newgame lda     #1
@@ -668,13 +676,17 @@ drawframe
         ora     vturn
         bne     @nomark
         lbsr    markseen
-@nomark lda     vmode           ; the corridor, a map or the pack view
+@nomark lda     vmode           ; the corridor, a map, the pack view or the help
         beq     @view
         cmpa    #3
         beq     @pack
+        cmpa    #4
+        beq     @help
         lbsr    mapdraw
         bra     @drawn
 @pack   lbsr    packview
+        bra     @drawn
+@help   lbsr    helpdraw
         bra     @drawn
 @view   tst     fainted         ; blacked out: nothing to see
         beq     @see
@@ -829,6 +841,8 @@ cmppal  fcb     $00,$12,$07,$1B
 askpal  fcb     $00,$3F,$3F,$3F ; black and white: looks the same on either monitor
 
 s_title fcn     "CRYPTS OF VAEL"
+s_credit fcn    "BY STEVE NORTON AND CLAUDE AI"
+s_version fcn   "VERSION 0.1.0" ; the game's version (semver: bump it only when Steve asks)
 s_ask1  fcn     "PRESS R FOR RGB MONITOR"
 s_ask2  fcn     "OR C FOR COMPOSITE"
 s_nodata fcn    "VAELDATA.DAT IS MISSING FROM THE DISK"
@@ -883,6 +897,7 @@ progend
         include "cmd.asm"
         include "map.asm"
         include "attack.asm"
+        include "help.asm"
 highend
         ifgt    highend-$FC00
         error   "high code is past $FBFF (its load copy must end below $7C00)"
