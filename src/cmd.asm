@@ -279,7 +279,11 @@ docmd   lbsr    tokenize
         bne     @nopause
         rts
 @nopause
-        lda     pending         ; waiting for Y or N?
+        tst     fainted         ; out cold: nothing you type does anything
+        beq     @awake
+        ldy     #m_uncon
+        lbra    msg
+@awake  lda     pending         ; waiting for Y or N?
         lbne    answer
 * A new seed: a bare number, or SEED with something after it
         lda     ntok
@@ -415,9 +419,9 @@ joinargs
 * ---- the commands (V_ numbers are positions in the verbs table) ----
 V_PAUSE equ     13
 
-vjump   fdb     c_move,c_reveal,c_turn,c_notyet,c_get,c_drop,c_stow,c_pull
+vjump   fdb     c_move,c_reveal,c_turn,c_attack,c_get,c_drop,c_stow,c_pull
         fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_notyet
-        fdb     c_notyet,c_notyet,c_seed,c_monitor,c_notyet,c_xlight,c_xjump,c_xdepth
+        fdb     c_notyet,c_notyet,c_seed,c_monitor,c_xxx,c_xlight,c_xjump,c_xdepth
         fdb     c_xinfo
 
 c_notyet
@@ -482,7 +486,14 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         lbra    die
 @ouch   ldy     #m_ouch
         lbra    msg
-@moved  lda     #1
+@moved  lbsr    exert           ; the step's cost (the reference's move: exert, then the rest)
+        lda     gmode
+        cmpa    #1
+        bne     @ret
+        ldd     stime
+        std     lastmove
+        lbsr    pbfs            ; steps from you, for the monsters
+        lda     #1
         sta     vdirty
         lbsr    meetmon         ; the reference's move: the monster here, the items, the ladder
         lbsr    seehere
@@ -670,6 +681,7 @@ c_xlight
 @say    lbra    msg
 
 c_xjump lbsr    jump
+        lbsr    pbfs
         lda     #1
         sta     vdirty
         rts

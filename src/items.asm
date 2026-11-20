@@ -28,6 +28,20 @@ newplayer
         ldd     #0
         std     xp
         std     acc
+        std     stime           ; and the simulation's clock and state
+        std     fatig
+        std     regen
+        std     lasthurt
+        std     lastmove
+        std     nextwarn
+        std     nextsound
+        std     atkready
+        std     atkready+2
+        std     hbnext
+        clr     hbbig
+        sta     strain
+        std     strain+1
+        clr     fainted
         clr     lastrank
         clr     kills
         lda     #HANDE
@@ -93,6 +107,9 @@ gameclock
         bne     @ret
         tst     pending
         bne     @ret
+        ldd     stime           ; the play clock (monsters, healing, fatigue)
+        addd    dtick
+        std     stime
         ldd     acc
         addd    dtick
         std     acc
@@ -424,6 +441,10 @@ c_get   lbsr    needhand
         lda     #1
         sta     vdirty
         sta     statdirty
+        lda     gkind           ; the crown: you've won
+        anda    #$7F
+        cmpa    #K_CROWN
+        lbeq    win
 @ret    rts
 
 * takeitem: X = an item record on the floor. Removes it (the rest move down).
@@ -894,9 +915,12 @@ packview
         ldy     #m_lookret
         lbra    printat
 
-* ---- status rows: hands, and health ----
-* paintstat: row 21 "L: <item or EMPTY>" left and "R: ..." right (held items light blue, empty
-* hands green, as the reference's yellow / green); row 22 "HP 100/100" in the middle. Blank on the title.
+* ---- status rows: hands, health and the heart ----
+* paintstat: row 21: "L: item" from the left, "R: item" ending at the right (held items light blue,
+* empty hands green, as the reference's yellow / green), and in the middle the heart (columns 15-16,
+* red) and HP (from column 17). An item name over 12 letters shows its kind word instead
+* (none do now; MENDING BREW was renamed to fit). Row 22: WINDED / EXHAUSTED, centred. Blank on the title.
+HEARTCOL equ    15
 paintstat
         ldx     #sbuf
         clr     ,x
@@ -913,11 +937,9 @@ paintstat
         rts
 @play   clra                    ; left hand
         bsr     @hand
-        lda     #1              ; right hand, right-aligned
+        lda     #1              ; right hand
         bsr     @hand
-        lbsr    mbstart         ; health
-        ldx     #m_hp
-        lbsr    mbstr
+        lbsr    mbstart         ; HP
         ldd     hp
         lbsr    mbnum
         ldx     #m_slash
@@ -928,9 +950,20 @@ paintstat
         clr     ,u
         lda     #TXGREEN
         sta     textmask
-        lda     #STATROW
+        ldd     #(HANDROW<<8)|(HEARTCOL+2)
         ldy     #mbuf
+        lbsr    printat
+        lbsr    drawheart
+        lbsr    fatlevel        ; row 22: WINDED / EXHAUSTED
+        tsta
+        beq     @ret
+        ldy     #m_winded
+        deca
+        beq     @fw
+        ldy     #m_exhausted
+@fw     lda     #STATROW
         lbra    center
+@ret    rts
 @hand   sta     ch              ; A = hand: "L: name" / "R: name"
         lbsr    mbstart
         ldx     #m_lcolon
@@ -946,8 +979,18 @@ paintstat
         bne     @held
         ldx     #m_empty
         bra     @nm
-@held   lbsr    kname
-        lda     #TXBLUE
+@held   pshs    b
+        lbsr    kname
+        tfr     x,u             ; too long? the kind word
+        lbsr    slen
+        puls    b
+        cmpb    #12
+        bls     @full
+        andb    #$7F
+        lslb
+        ldx     #ikwords
+        ldx     b,x
+@full   lda     #TXBLUE
 @nm     sta     textmask
         lbsr    mbstr
         ldu     mbp
@@ -964,6 +1007,119 @@ paintstat
         ldy     #mbuf
         lbra    printat
 
+* drawheart: the heart at row 21, columns 15-16, on the page mapped: big while it beats, else
+* the smaller one (and the smaller one, still, once the game is over)
+drawheart
+        lda     #TXRED
+        sta     textmask
+        ldd     #(HANDROW<<8)|HEARTCOL
+        lbsr    textpos
+        lda     #CH_HEART2
+        ldb     gmode           ; (still once the game is over)
+        cmpb    #1
+        bne     @h
+        tst     hbbig
+        beq     @h
+        lda     #CH_HEART
+@h      lbsr    putc
+        leax    4,x
+        inca
+        lbra    putc
+
+* heartbeat: from the main loop, as the reference's: a beat every (180 + 920 x health^1.5) ms
+* (health as a share of the most), quicker when fatigued (/ (1 + fatigue / 6)), at least 150 ms;
+* the big heart shows for 100 ms of each beat. Only while playing and the status row is showing.
+heartbeat
+        lda     gmode
+        cmpa    #1
+        bne     @ret
+        lda     paused
+        ora     pending
+        bne     @ret
+        lda     vmode           ; a map covers the status row
+        cmpa    #1
+        beq     @ret
+        cmpa    #2
+        beq     @ret
+        tst     hbbig           ; the end of a beat
+        beq     @due
+        ldd     ticks
+        subd    hboff
+        bmi     @due
+        clr     hbbig
+        bsr     hbshow
+@due    ldd     stime           ; a new beat?
+        subd    hbnext
+        bmi     @ret
+        lda     #1
+        sta     hbbig
+        ldd     ticks
+        addd    #6
+        std     hboff
+        bsr     hbperiod
+        addd    stime
+        std     hbnext
+        bra     hbshow
+@ret    rts
+
+* hbshow: redraw the heart on both screen pages
+hbshow  lda     back
+        pshs    a
+        clra
+        lbsr    mappage
+        bsr     drawheart
+        lda     #1
+        lbsr    mappage
+        lbsr    drawheart
+        puls    a
+        lbra    mappage
+
+* hbperiod: D = ticks to the next beat
+hbperiod
+        ldd     hp              ; health in 16ths of the most (0-16)
+        lslb
+        rola
+        lslb
+        rola
+        lslb
+        rola
+        lslb
+        rola
+        clr     ltmp45
+@div    cmpd    maxhp
+        blo     @q
+        subd    maxhp
+        inc     ltmp45
+        bra     @div
+@q      ldb     ltmp45
+        cmpb    #16
+        bls     @t
+        ldb     #16
+@t      ldx     #hbbase
+        ldb     b,x             ; the period at rest, ticks
+        lda     #180            ; x 180 / (180 + fatigue x 30)
+        mul
+        std     hbn
+        ldd     fatig
+        addd    #180
+        std     hbd
+        clr     ltmp45
+        ldd     hbn
+@d2     cmpd    hbd
+        blo     @q2
+        subd    hbd
+        inc     ltmp45
+        bra     @d2
+@q2     ldb     ltmp45
+        cmpb    #9              ; at least 150 ms
+        bhs     @ok
+        ldb     #9
+@ok     clra
+        rts
+
+* (180 + 920 x max(0.02, n/16)^1.5) ms in ticks, for health n/16 of the most
+hbbase  fcb     11,12,13,15,18,20,23,27,30,34,38,42,47,51,56,61,66
+
 * Variables
 hands   fcb     HANDE,HANDE     ; left, right
 npack   fcb     0
@@ -978,6 +1134,11 @@ kills   fcb     0
 lastt   fdb     0               ; gameclock: ticks last time, and ticks not yet made into seconds
 acc     fdb     0
 dtick   fdb     0
+hbbig   fcb     0               ; the heart: beating (big) now?
+hboff   fdb     0               ; when this beat's big heart goes (ticks)
+hbnext  fdb     0               ; when the next beat comes (stime)
+hbn     fdb     0
+hbd     fdb     0
 ltmp45  fcb     0
 imk     fcb     0
 itk     fcb     0

@@ -263,14 +263,16 @@ walkdone bra    walkdone        ; timing results in frames, totdraw, maxdraw
         lbsr    title
 mainloop
         lbsr    gameclock       ; seconds of play: the light burns
+        lbsr    simulate        ; fatigue, healing, fainting, the monsters
+        lbsr    heartbeat       ; the heart on the status row
         lbsr    paintdirty      ; text rows that changed
         ldd     spin            ; (time spent waiting is the randomness for a blank seed)
         addd    #1
         std     spin
         lbsr    getkey
-        beq     mainloop
+        beq     @view           ; no key: but a monster may have moved
         lbsr    editkey
-        tst     vdirty
+@view   tst     vdirty          ; redraw whenever something changed, key or not
         beq     mainloop
         clr     vdirty
         tst     gmode
@@ -424,7 +426,9 @@ enterlevel
         cmpa    #4
         blo     @try
         clr     pdir
-@ok     lda     #1
+@ok     lbsr    pbfs            ; steps from you, for the monsters
+        lbsr    monwake         ; and they may all act at once
+        lda     #1
         sta     vdirty
         sta     statdirty
         rts
@@ -455,11 +459,9 @@ doact   cmpa    #'U
         ldb     #1
         lbra    turn
 
-* jump (test command XJUMP): stand facing the down ladder, two cells away if the passage allows, else one.
-jump    lda     mz_lvl
-        cmpa    #5
-        bhs     @none           ; no down ladder on the last level
-        clr     tdir1
+* jump (test command XJUMP): stand facing the far cell (the down ladder; on level 5, where the king
+* waits), two cells away if the passage allows, else one.
+jump    clr     tdir1
 @dir    ldb     tdir1           ; one cell back from the ladder, against direction tdir1
         ldx     #dx1
         lda     farx
@@ -623,7 +625,11 @@ drawframe
         bra     @drawn
 @pack   lbsr    packview
         bra     @drawn
-@view   lbsr    render
+@view   tst     fainted         ; blacked out: nothing to see
+        beq     @see
+        lbsr    clrview
+        bra     @drawn
+@see    lbsr    render
         tst     vlight          ; no light: the reference's "IT IS DARK" at the top of the view
         bne     @drawn
         lda     #TXGREEN
@@ -742,6 +748,7 @@ setpal  pshs    d,x,y,u
         include "view.asm"
         include "msg.asm"
         include "items.asm"
+        include "sim.asm"
         include "dload.asm"
         ifdef   FONTTEST
         include "fonttest.asm"
