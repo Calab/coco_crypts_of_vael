@@ -882,6 +882,7 @@ killmon lda     #SFX_KILL
 @ret    rts
 
 * XXX (test): kill the monster in your cell or ahead, or else any beside you
+        ifdef   TESTCMDS
 c_xxx   ldd     px
         lbsr    monat
         beq     @kill
@@ -908,6 +909,7 @@ c_xxx   ldd     px
         lbra    msg
 @kill   stx     mp
         lbra    killmon
+        endc
 
 * win: the crown in your hand (the reference's win)
 win     lda     #2              ; the win tune

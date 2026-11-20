@@ -543,6 +543,7 @@ doact   cmpa    #'U
         ldb     #1
         lbra    turn
 
+        ifdef   TESTCMDS
 * jump (test command XJUMP): stand facing the far cell (the down ladder; on level 5, where the king
 * waits), two cells away if the passage allows, else one.
 jump    clr     tdir1
@@ -587,6 +588,7 @@ jump    clr     tdir1
         lda     ty
         sta     py
 @done   rts
+        endc
 
 * turn: A = new direction, B = 1 turning right or -1 left. Draws the halfway pan frame; the
 * caller's normal frame then shows the full turn.
@@ -883,7 +885,9 @@ s_nodata fcn    "VAELDATA.DAT IS MISSING FROM THE DISK"
 secbuf  fill    0,256           ; a disk sector (start-up only)
 ptbuf   fill    0,24*3          ; drawshp: one polyline's points on screen (x 2 bytes, y)
 
+        ifdef   TESTCMDS
 lightnext fcb   7,0,0,0,0,0,0,4 ; indexed by vlight: [0] none -> 7, [4] torch -> 0, [7] lantern -> 4
+        endc
 dirname fcn     "NORTH"         ; 6 bytes each
         fcn     "EAST"
         fcb     0

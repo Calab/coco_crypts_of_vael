@@ -112,7 +112,7 @@ run-cmp: $(DISK)
 	$(XROAR) $(XROAR_FLAGS) $(AO) -tv-input cmp -run $(BUILD)/vael.bin
 
 shot: $(SOURCES) $(DISK) $(BUILD)/fx.dat | $(BUILD)
-	$(ASM) -D AUTOMON=$$(printf '%d' "'$(strip $(SHOT_MON))") $(SHOT_DEFS) --list=$(BUILD)/shot.lst \
+	$(ASM) -D TESTCMDS -D AUTOMON=$$(printf '%d' "'$(strip $(SHOT_MON))") $(SHOT_DEFS) --list=$(BUILD)/shot.lst \
 	    --symbol-dump=$(BUILD)/shot.sym -o $(BUILD)/shot.raw $(SRC)/main.asm
 	$(call variant,shot)
 	@addr=$$(awk '$$1=="$(strip $(SHOT_AT))" {sub(/\$$/,"",$$3); print $$3}' $(BUILD)/shot.sym); \
@@ -176,7 +176,7 @@ tunetime: $(SOURCES) $(DISK) | $(BUILD)
 # then add up the cycles per routine. e.g. make profile SHOT_DEFS="-DAUTOWALK=80 -DSTARTLIGHT=7 -DSEEDVAL=0" PROF_N=26
 PROF_N ?= 2
 profile: $(SOURCES) $(DISK) | $(BUILD)
-	$(ASM) $(SHOT_DEFS) -D AUTOMON=82 --symbol-dump=$(BUILD)/prof.sym -o $(BUILD)/prof.raw $(SRC)/main.asm
+	$(ASM) -D TESTCMDS $(SHOT_DEFS) -D AUTOMON=82 --symbol-dump=$(BUILD)/prof.sym -o $(BUILD)/prof.raw $(SRC)/main.asm
 	$(call variant,prof)
 	@addr=$$(awk '$$1=="render" {sub(/\$$/,"",$$3); print $$3}' $(BUILD)/prof.sym); \
 	timeout 300 $(XROAR) $(VFLAGS) -load-fd0 $(BUILD)/prof.dsk -run $(BUILD)/prof.bin \

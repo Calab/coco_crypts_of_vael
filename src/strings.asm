@@ -43,7 +43,8 @@ verbs   fcb     0
         fcn     "SEED"          ; 18
         fcb     0
         fcn     "MONITOR"       ; 19
-        fcb     1
+        ifdef   TESTCMDS        ; the test commands: only in test builds (make shot / keys / walk), not
+        fcb     1               ;   the release (Steve)
         fcn     "XXX"           ; 20
         fcb     1
         fcn     "XLIGHT"        ; 21 test: cycle the light
@@ -53,6 +54,7 @@ verbs   fcb     0
         fcn     "XDEPTH"        ; 23 test: XDEPTH n goes to level n
         fcb     1
         fcn     "XINFO"         ; 24 test: position, facing, draw time
+        endc
         fcb     $FF
 
 * Argument words
@@ -97,6 +99,7 @@ m_notyet fcn    "NOT READY YET."                ; (ours, until the command exist
 m_monwhich fcn  "MONITOR RGB OR COMPOSITE?"     ; (ours)
 m_monrgb fcn    "MONITOR SET TO RGB."           ; (ours)
 m_moncmp fcn    "MONITOR SET TO COMPOSITE."     ; (ours)
+        ifdef   TESTCMDS
 m_lant  fcn     "LIGHT: LANTERN."               ; (ours, test)
 m_torch fcn     "LIGHT: TORCH."                 ; (ours, test)
 m_none  fcn     "LIGHT: NONE."                  ; (ours, test)
@@ -106,6 +109,7 @@ m_comma fcn     ","
 m_facing fcn    " FACING "
 m_draw  fcn     ". DRAW "
 m_sixty fcn     "/60 SEC."
+        endc
 
 * The Y/N questions, shown in the middle of the view (the reference's overlay text; its answers are on
 * one line there, which doesn't fit 40 columns, so here they're stacked)
@@ -279,7 +283,9 @@ m_youhit fcn    "YOU HIT THE "
 m_sp1   fcn     " "
 m_itdrops fcn   "IT DROPS "
 m_glows fcn     "SOMETHING GLOWS WHERE THE KING FELL..."
+        ifdef   TESTCMDS
 m_xxxnone fcn   "XXX: NO MONSTER NEXT TO YOU."
+        endc
 m_won   fcn     "THE CROWN BURNS WARM IN YOUR HAND. YOU HAVE WON!"
 m_winded fcn    "WINDED"
 m_exhausted fcn "EXHAUSTED"

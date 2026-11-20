@@ -446,8 +446,10 @@ V_EXAMINE equ   10
 
 vjump   fdb     c_move,c_reveal,c_turn,c_attack,c_get,c_drop,c_stow,c_pull
         fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_sleep
-        fdb     c_help,c_sound,c_seed,c_monitor,c_xxx,c_xlight,c_xjump,c_xdepth
-        fdb     c_xinfo
+        fdb     c_help,c_sound,c_seed,c_monitor
+        ifdef   TESTCMDS
+        fdb     c_xxx,c_xlight,c_xjump,c_xdepth,c_xinfo
+        endc
 
 c_notyet
         ldy     #m_notyet
@@ -690,7 +692,8 @@ c_monitor
         lbsr    setpal
         lbra    msg
 
-* Test commands (typed in full)
+* Test commands (typed in full; only in test builds: TESTCMDS, which make shot defines)
+        ifdef   TESTCMDS
 c_xlight
         ldx     #lightnext      ; lantern -> torch -> none -> lantern (that burns for 999 s)
         ldb     vlight
@@ -767,6 +770,7 @@ c_xinfo lbsr    mbstart         ; AT x,y FACING dir. DRAW n/60 SEC.
         ldx     #m_sixty
         lbsr    mbstr
         lbra    mbsend
+        endc
 
 * meetmon: "YOU ARE FACE TO FACE WITH THE BONE HOUND!" (or "THE ... SLEEPS RIGHT HERE.") if a
 * monster shares your new cell
