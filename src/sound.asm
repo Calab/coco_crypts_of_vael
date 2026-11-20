@@ -11,8 +11,13 @@
 * Two voices: 0 the heartbeat, 1 everything else (actions and monster cries; a cry never interrupts
 * an action). Each steps a 16-bit phase and makes its wave from it on the spot (no tables): sawtooth,
 * square, triangle, or noise (an 8-bit LFSR, a new value each time the phase wraps, so the phase step
-* sets how coarse it is). Sample = wave x volume / 256; the volumes add up to 254 at most, and the bias
-* (128 - volumes / 2) cancels their DC.
+* sets how coarse it is). Sample = wave x volume / 256; the volumes add up to 254 at most.
+*
+* Silence is DAC level 0, and the sound stays switched on all game. There's no DC-cancelling bias:
+* each voice starts its wave at phase 0 and its level rises and falls with its volume, so sounds start
+* and end at 0 without a step. (Switching the sound on and off, or idling at the DAC's middle, clicked or
+* hissed in XRoar: Steve, 2026-11-19.) The tunes, which do use a bias, glide the DAC up to the middle
+* before they play and back down after (tune.asm).
 *
 * Every STICK samples a tick: each voice counts down its segment, slides its pitch, decays its volume,
 * and moves to its next segment when one ends. A sound is a list of segments in bank BANKSND
@@ -38,7 +43,6 @@ VPRI    equ     14              ; 1: priority of the sound playing
 VNZ     equ     15              ; 1: noise value held
 s0      equ     SNDDP+32        ; voice 0's part of the sample
 sout    equ     SNDDP+33        ; the next sample to put out
-sbias   equ     SNDDP+34
 scnt    equ     SNDDP+35        ; samples to the next tick
 slfsr   equ     SNDDP+36        ; noise
 smaster equ     SNDDP+37        ; SOUND volume (0-252)
@@ -140,7 +144,6 @@ v1noi   ldd     <V1+VPH
         bra     v1d
 v1off   clra
 v1d     adda    <s0
-        adda    <sbias
         anda    #$FC
         ora     #$02            ; (bit 1 is the serial output: keep it idle)
         sta     <sout
@@ -149,7 +152,7 @@ v1d     adda    <s0
         puls    d,x
         rti
 
-* ---- a tick: segments, slides, decays, the bias; the timer stops when both voices are idle ----
+* ---- a tick: segments, slides, decays; the timer stops when both voices are idle ----
 stick   lda     #STICK
         sta     <scnt
         pshs    y,u
@@ -164,16 +167,11 @@ stick   lda     #STICK
         bsr     svoice
         puls    a
         sta     MMUT0+6
-        lda     <V0+VVO         ; bias = 128 - (volumes) / 2
-        adda    <V1+VVO
-        lsra
-        nega
-        adda    #128
-        sta     <sbias
         lda     <V0+VDUR        ; anything still playing?
         ora     <V1+VDUR
         bne     @r
-        clr     TIMERHI         ; no: the timer stops (a count of 0) and the sound is switched off
+        clr     FIRQENR         ; no: the timer's interrupt off (in XRoar a count of 0 doesn't stop
+        clr     TIMERHI         ; the timer: it wraps every 4096), the timer stopped, the DAC at 0
         clr     TIMERLO
         clr     <srun
         lbsr    sndquiet
@@ -255,6 +253,8 @@ sndplay pshs    cc,d,x,y,u
 @go     sta     VPRI,y
         ldd     ,x
         std     VSEG,y
+        clr     VPH,y           ; (its wave starts at 0: no step)
+        clr     VPH+1,y
         lda     <stmp
         sta     VLV,y
         lda     #1              ; the next tick starts it
@@ -262,11 +262,10 @@ sndplay pshs    cc,d,x,y,u
         tst     <srun           ; the timer running?
         bne     @x
         inc     <srun
-        lda     $FF23           ; sound on (from the DAC)
-        ora     #$08
-        sta     $FF23
         lda     #1
         sta     <scnt
+        lda     #$20            ; the timer's interrupt on
+        sta     FIRQENR
         ldd     #STIMER
         stb     TIMERLO
         sta     TIMERHI
@@ -277,6 +276,7 @@ sndplay pshs    cc,d,x,y,u
 * sndoff: silence (before a tune, which drives the DAC itself)
 sndoff  pshs    cc,a
         orcc    #$50
+        clr     FIRQENR
         clr     TIMERHI
         clr     TIMERLO
         clr     <srun
@@ -285,16 +285,11 @@ sndoff  pshs    cc,a
         bsr     sndquiet
         puls    cc,a,pc
 
-* sndquiet: sound switched off, the DAC at its middle for when it's next switched on. While nothing
-* plays the sound stays off, as BASIC leaves it: a steady level on the speaker is silent in theory, but
-* XRoar turned it into static (Steve, 2026-11-19).
+* sndquiet: the DAC at 0 (silence)
 sndquiet
-        lda     #$82
+        lda     #$02            ; (bit 1: the serial output, idle)
         sta     <sout
         sta     DAC
-        lda     $FF23
-        anda    #$F7
-        sta     $FF23
         rts
 
 * sndinit: (at start-up, interrupts off) state, the FIRQ vector, the timer's clock, sound on
@@ -306,10 +301,6 @@ sndinit ldx     #SNDDP
         std     <V0+VWJ
         ldd     #v1off
         std     <V1+VWJ
-        lda     #128
-        sta     <sbias
-        lda     #$82
-        sta     <sout
         lda     #1
         sta     <slfsr
         lda     #6*36           ; SOUND 6, as the reference starts
@@ -320,15 +311,17 @@ sndinit ldx     #SNDDP
         stx     $FEF5
         lda     #$20            ; timer clock 279 ns (3.58 MHz), MMU task 0
         sta     INIT1
-        lda     #$20            ; the timer's FIRQ
-        sta     FIRQENR
-        lda     $FF01           ; the sound source: the DAC (select lines 0, 0); switched on only while
-        anda    #$F7            ; something plays
+        bsr     sndquiet
+        lda     $FF01           ; the sound source: the DAC (select lines 0, 0), switched on for good
+        anda    #$F7
         sta     $FF01
         lda     $FF03
         anda    #$F7
         sta     $FF03
-        bra     sndquiet
+        lda     $FF23
+        ora     #$08
+        sta     $FF23
+        rts
 * ---- the game's side ----
 
 * sfxa: play sound A at full loudness. Keeps B, X, Y, U.

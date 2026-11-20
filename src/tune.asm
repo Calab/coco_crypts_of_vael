@@ -106,6 +106,9 @@ tuneplay
         sta     <s23
         ora     #$08
         sta     $FF23
+        lda     #$02            ; glide the DAC from 0 (silence) up to its middle: no click
+        ldb     #4
+        lbsr    glide
 * ---- one sample, then one task: every pass takes exactly TSAMP cycles ----
 smp     ldd     <v0+PH
         addd    <v0+INC
@@ -574,13 +577,30 @@ tidle   lda     <cnt
         brn     @c
         jmp     smp
 
-texit   lda     <s01            ; sound back as it was
+texit   lda     #$82            ; glide back down to 0
+        ldb     #-4
+        lbsr    glide
+        lda     <s01            ; sound back as it was
         sta     $FF01
         lda     <s03
         sta     $FF03
         lda     <s23
         sta     $FF23
         puls    cc,dp,d,x,y,u,pc
+
+* glide: the DAC from A in 32 steps of B (4 = one DAC step), about 23 ms
+glide   ldx     #32
+@s      sta     $FF20
+        pshs    b
+        clrb
+@d      decb
+        bne     @d
+        puls    b
+        pshs    b
+        adda    ,s+
+        leax    -1,x
+        bne     @s
+        rts
 
         setdp   0
         include "tunes.asm"
