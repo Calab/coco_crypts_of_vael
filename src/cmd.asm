@@ -497,7 +497,7 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         beq     @moved
         lda     #SFX_THUD
         lbsr    sfxa
-        ldb     #4              ; the flash (67 ms: about half the reference's 120, Steve)
+        ldb     #2              ; the flash (33 ms, Steve; the reference's is 120)
         lbsr    fxflash
         ldd     #3              ; walking into stone hurts: 2-4 (the reference's rnd(2, 4))
         lbsr    rndn

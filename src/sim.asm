@@ -616,7 +616,7 @@ mattack ldx     mp
         lda     mblock          ; the strike mark: a hit (0) or blocked (2: sparks too)
         lsla
         lbsr    fxstrike
-        ldb     #5              ; the flash (80 ms: half the reference's 160, Steve)
+        ldb     #3              ; the flash (50 ms, Steve; the reference's is 160)
         lbsr    fxflash
         ldd     stime
         std     lasthurt
