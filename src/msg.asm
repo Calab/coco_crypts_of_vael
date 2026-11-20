@@ -20,7 +20,9 @@ CMDROW  equ     23
 LOGW    equ     41              ; bytes per log line (40 + terminator)
 
 * msg: Y = zero-terminated message (up to 255 characters). Word-wraps it into the log.
-msg     pshs    d,x,y,u
+msg     tst     sleeping        ; asleep: held back (the last three are kept, in sleeplog)
+        lbne    sleepmsg
+        pshs    d,x,y,u
         inc     msgcnt
 @line   tfr     y,x             ; length of what's left
         clrb
@@ -50,6 +52,33 @@ msg     pshs    d,x,y,u
 @done   lda     #1
         sta     logdirty
         puls    d,x,y,u,pc
+
+* sleepmsg: asleep: keep the message (up to 63 characters) in the next of three sleeplog slots
+sleepmsg
+        pshs    d,x,y
+        lda     slhead
+        ldb     #64
+        mul
+        addd    #sleeplog
+        tfr     d,x
+        ldb     #63
+@copy   lda     ,y+
+        sta     ,x+
+        beq     @end
+        decb
+        bne     @copy
+        clr     ,x
+@end    lda     slhead
+        inca
+        cmpa    #3
+        blo     @h
+        clra
+@h      sta     slhead
+        lda     nslog
+        cmpa    #3
+        bhs     @n
+        inc     nslog
+@n      puls    d,x,y,pc
 
 * pushline: Y = text, B = length (0-40). Scrolls the log up and adds the line at the bottom.
 pushline
@@ -228,6 +257,9 @@ msgcnt  fcb     0
 logdirty fcb    0
 statdirty fcb   0
 cmddirty fcb    0
+sleeping fcb    0               ; SLEEP is running: messages go to sleeplog
+nslog   fcb     0               ; how many are kept there (up to 3)
+slhead  fcb     0               ; the slot the next one goes in
 mbp     fdb     mbuf
 mbuf    fill    0,128
 sbuf    fill    0,48

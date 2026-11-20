@@ -213,6 +213,7 @@ simulate
         lda     paused
         ora     pending
         lbne    @ret
+        lbsr    freshen
         lbsr    fatlevel        ; fatigue eases (WINDED / EXHAUSTED come and go on the status row)
         sta     etmp
         ldd     fatig
@@ -254,6 +255,35 @@ simulate
 @noreg  lbsr    checkfaint
         lbra    monsters
 @ret    rts
+
+* freshen: the play clock is 16 bits (wraps after 18 minutes) and times are compared by signed
+* differences, so none may fall more than 9 minutes behind it. Any time over 10000 ticks (2.8 min) in
+* the past is moved up to 10000 ticks ago: still long past for everything that checks it.
+freshen ldx     #fresht
+@w      ldy     ,x++
+        beq     @mons
+        bsr     @one
+        bra     @w
+@mons   lda     nmons
+        beq     @ret
+        sta     etmp
+        ldy     #mons+MNEXTMV
+@m      bsr     @one
+        leay    MNEXTAT-MNEXTMV,y
+        bsr     @one
+        leay    MONREC-(MNEXTAT-MNEXTMV),y
+        dec     etmp
+        bne     @m
+@ret    rts
+@one    ldd     stime
+        subd    ,y
+        cmpd    #10000
+        blt     @ok
+        ldd     stime
+        subd    #10000
+        std     ,y
+@ok     rts
+fresht  fdb     lasthurt,lastmove,laststruck,nextwarn,nextsound,atkready,atkready+2,hbnext,0
 
 * ---- the monsters ----
 monsters
@@ -607,6 +637,7 @@ mattack ldx     mp
         inc     mblock
 @dmg    ldd     stime
         std     lasthurt
+        std     laststruck
         clra
         ldb     mdmg
         lbsr    hurt
@@ -897,6 +928,7 @@ fatig   fdb     0               ; fatigue x 30
 strain  fcb     0,0,0           ; strain, in 1/256 health
 regen   fdb     0
 lasthurt fdb    0
+laststruck fdb  0               ; when a monster last hit you (SLEEP refuses for 4 s)
 lastmove fdb    0
 nextwarn fdb    0
 nextsound fdb   0
@@ -924,3 +956,70 @@ kx      fcb     0               ; kx, ky together
 ky      fcb     0
 kk      fcb     0
 kc      fcb     0
+
+* ---- SLEEP's helpers (c_sleep is in cmd.asm, in high code) ----
+* monbeside: EQ (X = the monster) if an awake monster is in your cell or one step away
+monbeside
+        ldx     #mons
+        lda     nmons
+        beq     @no
+        sta     slmc
+@each   lda     MFLAGS,x
+        bita    #MF_DORMANT
+        bne     @next
+        lda     MX,x
+        ldb     MY,x
+        lbsr    pdat
+        cmpd    #1
+        bhi     @next           ; (-1, unreachable, is high too)
+        clra                    ; EQ
+        rts
+@next   leax    MONREC,x
+        dec     slmc
+        bne     @each
+@no     lda     #1
+        rts
+
+* slstrike: EQ and Y = the newest held-back message with "STRIKES" in it, if any
+slstrike
+        lda     nslog
+        beq     @no
+        sta     slmc
+        ldb     slhead          ; newest: the slot before slhead
+@slot   decb
+        bpl     @s
+        ldb     #2
+@s      stb     slcnt
+        lda     #64
+        mul
+        addd    #sleeplog
+        tfr     d,y
+        tfr     d,x
+@scan   lda     ,x              ; look for "STRIKES"
+        beq     @nf
+        ldu     #w_strikes
+        pshs    x
+@cmp    lda     ,u+
+        beq     @found
+        cmpa    ,x+
+        beq     @cmp
+        puls    x
+        leax    1,x
+        bra     @scan
+@found  puls    x
+        clra                    ; EQ
+        rts
+@nf     ldb     slcnt
+        dec     slmc
+        bne     @slot
+@no     lda     #1
+        rts
+
+sln     fcb     0               ; SLEEP's variables
+slcnt   fcb     0
+sltmp   fcb     0
+slmc    fcb     0
+slhp    fdb     0
+sllight fcb     0
+sltotal fdb     0
+simmed  fdb     0

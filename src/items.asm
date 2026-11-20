@@ -33,6 +33,9 @@ newplayer
         std     regen
         std     lasthurt
         std     lastmove
+        ldd     #-240           ; (never struck: SLEEP isn't refused at the start)
+        std     laststruck
+        ldd     #0
         std     nextwarn
         std     nextsound
         std     atkready

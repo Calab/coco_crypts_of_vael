@@ -38,8 +38,8 @@ PAGE0BLK equ    SCR0BLK         ; physical blocks $30-$33
 PAGE1BLK equ    SCR0BLK+4       ; physical blocks $34-$37
 
 * Memory map (CPU address: what's there, physical block):
-*   $0100-$0B7F  buffers that start empty (grid, seen, items, log, monsters)  $38
-*   $0B80-$0CFF  stack (grows down from $0D00)                        $38
+*   $0100-$0BFF  buffers that start empty (grid, seen, items, log, monsters, sleep log)  $38
+*   $0C00-$0CFF  stack (grows down from $0D00)                        $38
 *   $0D00-$0DFF  direct page variables                                $38
 *   $0E00-$3FFF  fixed code and data (must end below $4000)           $38-$39
 *   $4000-$BFFF  the screen page being drawn                          $30-$33 or $34-$37
@@ -58,8 +58,9 @@ items   equ     nitems+1        ;   for itemsave / itemload)
 logtxt  equ     items+48*5      ; the message log (4 lines of 41)
 nmons   equ     logtxt+4*41     ; the current level's monsters: count, then records (kept together
 mons    equ     nmons+1         ;   for monsave / monload)
-LOWEND  equ     mons+20*14
-        ifgt    LOWEND-$0B80
+sleeplog equ    mons+20*14      ; SLEEP: the last three messages held back (3 x 64)
+LOWEND  equ     sleeplog+3*64
+        ifgt    LOWEND-$0C00
         error   "low buffers run into the stack"
         endc
 

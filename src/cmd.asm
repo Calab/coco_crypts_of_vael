@@ -438,7 +438,7 @@ V_LOOK  equ     9
 V_EXAMINE equ   10
 
 vjump   fdb     c_move,c_reveal,c_turn,c_attack,c_get,c_drop,c_stow,c_pull
-        fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_notyet
+        fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_sleep
         fdb     c_notyet,c_notyet,c_seed,c_monitor,c_xxx,c_xlight,c_xjump,c_xdepth
         fdb     c_xinfo
 
@@ -498,6 +498,10 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         ldd     #3              ; walking into stone hurts: 2-4 (the reference's rnd(2, 4))
         lbsr    rndn
         addd    #2
+        pshs    d
+        ldd     stime
+        std     lasthurt
+        puls    d
         lbsr    hurt
         bne     @ouch
         ldy     #m_dash
@@ -1070,3 +1074,206 @@ slen    clrb
 @end    rts
 
 obuf    fill    0,42
+
+* ---- SLEEP n (the reference's startSleep / sleepTick / endSleep) ----
+* n moves of 5 s each pass in 50 ms steps exactly as play would (healing, the light, monsters), with
+* the screen dark and messages held back. A monster beside you, or a blow, wakes you at once.
+c_sleep lda     #1              ; how long: 1-20
+        lbsr    tokget
+        tstb
+        beq     @how
+        cmpb    #2
+        bhi     @how
+        stb     slcnt
+        clr     sln
+@dig    lda     ,x+
+        suba    #'0
+        cmpa    #9
+        bhi     @how
+        sta     sltmp
+        lda     sln
+        ldb     #10
+        mul
+        addb    sltmp
+        stb     sln
+        dec     slcnt
+        bne     @dig
+        lda     sln
+        beq     @how
+        cmpa    #20
+        bls     @near
+@how    ldy     #m_sleephow
+        lbra    msg
+@near   lbsr    monbeside       ; not with a monster beside you, or one that struck in the last 4 s
+        beq     @close
+        ldd     stime
+        subd    laststruck
+        cmpd    #240
+        bge     @sleep
+@close  ldy     #m_tooclose
+        lbra    msg
+@sleep  clr     vmode
+        ldd     hp              ; to report afterwards
+        std     slhp
+        lda     #$FF
+        tst     vlight
+        beq     @nl
+        lda     lkind
+@nl     sta     sllight
+        clr     nslog
+        clr     slhead
+        lda     #1
+        sta     sleeping
+        ldx     #PALETTE        ; dark
+        clr     ,x+
+        clr     ,x+
+        clr     ,x+
+        clr     ,x
+        lda     sln             ; n x 5 s = n x 300 ticks
+        ldb     #150
+        mul
+        lslb
+        rola
+        std     sltotal
+        ldd     #0
+        std     simmed
+@step   ldd     #3              ; 50 ms of play
+        std     dtick
+        ldd     stime
+        addd    #3
+        std     stime
+        ldd     acc
+        addd    #3
+        std     acc
+        cmpd    #60
+        blo     @sim
+        subd    #60
+        std     acc
+        lbsr    second
+@sim    lbsr    simulate
+        lda     gmode
+        cmpa    #1
+        lbne    @dead
+        lbsr    monbeside
+        beq     @woken
+        ldd     lasthurt        ; struck in this step?
+        cmpd    stime
+        beq     @woken
+        ldd     simmed
+        addd    #3
+        std     simmed
+        cmpd    sltotal
+        blo     @step
+        lbsr    @wake           ; slept it all
+        lbsr    mbstart         ; "YOU WAKE AFTER 5 MOVES."
+        ldx     #m_wakeafter
+        lbsr    mbstr
+        clra
+        ldb     sln
+        pshs    b
+        lbsr    mbnum
+        puls    b
+        ldx     #m_moves
+        decb
+        bne     @mv
+        ldx     #m_move
+@mv     lbsr    mbstr
+        lbsr    mbsend
+        bra     @after
+@woken  lbsr    @wake           ; "YOU ARE JOLTED AWAKE AFTER 2 MOVES!" (rounded, at least 1)
+        lbsr    mbstart
+        ldx     #m_jolted
+        lbsr    mbstr
+        ldd     simmed
+        addd    #150
+        clr     sltmp
+@div    cmpd    #300
+        blo     @dd
+        subd    #300
+        inc     sltmp
+        bra     @div
+@dd     lda     sltmp
+        bne     @k
+        inc     sltmp
+@k      clra
+        ldb     sltmp
+        lbsr    mbnum
+        ldx     #m_moves2
+        lda     sltmp
+        cmpa    #1
+        bne     @mv2
+        ldx     #m_move2
+@mv2    lbsr    mbstr
+        lbsr    mbsend
+        lbsr    slstrike        ; the blow that woke you, or who's beside you
+        bne     @beside
+        lbsr    msg
+        bra     @after
+@beside lbsr    monbeside
+        bne     @some
+        ldb     MKND,x
+        ldx     #m_the
+        ldy     #m_beside
+        lbsr    saymon
+        bra     @after
+@some   ldy     #m_somebeside
+        lbsr    msg
+@after  lbsr    mbstart         ; "HEALTH 61 -> 74."
+        ldx     #m_health
+        lbsr    mbstr
+        ldd     slhp
+        lbsr    mbnum
+        ldx     #m_arrow
+        lbsr    mbstr
+        ldd     hp
+        lbsr    mbnum
+        ldx     #m_dot
+        lbsr    mbstr
+        lbsr    mbsend
+        lda     sllight         ; the light burned out?
+        cmpa    #$FF
+        beq     @weak
+        tst     vlight
+        bne     @weak
+        tfr     a,b
+        ldx     #m_your
+        ldy     #m_burnedout
+        lbsr    saything
+@weak   tst     fainted
+        beq     @done
+        ldy     #m_tooweak
+        lbsr    msg
+@done   lda     #1
+        sta     vdirty
+        sta     statdirty
+        rts
+@dead   bsr     @wake           ; "YOU NEVER WAKE." and the last messages held back
+        ldy     #m_neverwake
+        lbsr    msg
+        lda     nslog           ; oldest first
+        beq     @done
+        sta     sltmp
+        ldb     slhead
+        cmpa    #3
+        beq     @old
+        clrb
+@old    stb     slcnt
+@each   lda     slcnt
+        ldb     #64
+        mul
+        addd    #sleeplog
+        tfr     d,y
+        lbsr    msg
+        lda     slcnt
+        inca
+        cmpa    #3
+        blo     @nw
+        clra
+@nw     sta     slcnt
+        dec     sltmp
+        bne     @each
+        bra     @done
+@wake   clr     sleeping        ; awake: the screen comes back
+        ldx     #palsh
+        lbra    setpal
+
