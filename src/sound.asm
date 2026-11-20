@@ -338,7 +338,9 @@ sfx     tst     sleeping
 
 * crytick: (from simulate) now and then a monster within hearing calls out, quieter the further away
 * it is along the passages (the reference's cryLevel). The reference times each monster's cries
-* separately; here every 0.9-2 s one monster is picked at random (a sleeper half the time).
+* separately (every 1.1-2.4 s, sleepers half as often); here every 0.9-2 s one monster is picked at
+* random from those within hearing (17 steps), a sleeper crying only half the time. (Picking from the
+* whole level, as at first, left one monster nearby crying about once in 20 s: Steve heard none.)
 crytick ldd     stime
         subd    nextcry
         bmi     @r
@@ -349,16 +351,15 @@ crytick ldd     stime
         addd    #54
         addd    stime
         std     nextcry
-        lda     nmons
+        lda     #$FF            ; how many are within hearing?
+        bsr     crypick
+        tstb
         beq     @r
-        pshs    a
+        pshs    b
         lbsr    rand
         puls    b
-        mul                     ; a monster: A = random x count / 256
-        ldb     #MONREC
-        mul
-        addd    #mons
-        tfr     d,x
+        mul                     ; one of them: A = random x count / 256
+        bsr     crypick
         lda     MFLAGS,x
         bita    #MF_DORMANT
         beq     @aw
@@ -368,14 +369,37 @@ crytick ldd     stime
 @aw     lda     MX,x
         ldb     MY,x
         lbsr    pdat
-        cmpd    #17
-        bhi     @r              ; (unreachable, -1, is high too)
         ldu     #crylv
         ldb     b,u
         lda     MKND,x
         adda    #SFX_CRY
         bra     sfx
 @r      rts
+
+* crypick: A = n. X = the n'th monster (from 0) within hearing; B = how many within hearing were
+* counted (all of them when A is $FF).
+crypick pshs    a               ; 2,s: count down to the one wanted
+        clr     ,-s             ; 1,s: within hearing so far
+        lda     nmons
+        pshs    a               ; ,s: monsters left
+        ldx     #mons
+@l      tst     ,s
+        beq     @e
+        lda     MX,x
+        ldb     MY,x
+        lbsr    pdat
+        cmpd    #17
+        bhi     @n              ; (unreachable, -1, is high too)
+        inc     1,s
+        tst     2,s
+        beq     @e              ; this one
+        dec     2,s
+@n      leax    MONREC,x
+        dec     ,s
+        bra     @l
+@e      ldb     1,s
+        leas    3,s
+        rts
 nextcry fdb     0
 
 sndres_end

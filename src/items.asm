@@ -38,6 +38,7 @@ newplayer
         ldd     #0
         std     nextwarn
         std     nextsound
+        std     nextcry         ; (left from an earlier game it could be minutes ahead: no cries)
         std     atkready
         std     atkready+2
         std     hbnext
@@ -432,18 +433,13 @@ c_get   lbsr    needhand
         lbsr    gainxp
 @said   lda     #SFX_GET
         lbsr    sfxa
-        lbsr    mbstart         ; "YOU TAKE THE DAGGER IN YOUR LEFT HAND."
-        ldx     #m_youtake
+        lbsr    mbstart         ; "YOU TAKE THE DAGGER." (agreed: the reference's "IN YOUR LEFT HAND"
+        ldx     #m_youtake      ; dropped to fit 40 columns; the status row shows the hand)
         lbsr    mbstr
         ldb     gkind
         lbsr    kname
         lbsr    mbstr
-        ldx     #m_inyour
-        lbsr    mbstr
-        lda     ch
-        lbsr    handname
-        lbsr    mbstr
-        ldx     #m_handdot
+        ldx     #m_dot
         lbsr    mbstr
         lbsr    mbsend
         lda     #1

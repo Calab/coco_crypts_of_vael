@@ -32,7 +32,30 @@ msg     tst     sleeping        ; asleep: held back (the last three are kept, in
         bra     @len
 @lend   cmpb    #40
         bls     @last
-        ldb     #40             ; too long: break at the last space within 40 columns
+        pshs    b               ; too long: break after a sentence (". " "! " "? ") within 40 columns
+        ldb     #40             ; if the rest then fits (agreed: keeps two-sentence messages whole)
+@sb     leax    b,y
+        lda     ,x
+        cmpa    #$20
+        bne     @sbn
+        lda     -1,x
+        cmpa    #'.
+        beq     @sbc
+        cmpa    #'!
+        beq     @sbc
+        cmpa    #'?
+        bne     @sbn
+@sbc    lda     ,s              ; rest = length - B - 1
+        pshs    b
+        suba    ,s+
+        deca
+        cmpa    #40
+        bls     @sbok
+@sbn    decb
+        cmpb    #1
+        bhi     @sb
+        leas    1,s
+        ldb     #40             ; else break at the last space within 40 columns
 @sp     lda     b,y
         cmpa    #$20
         beq     @brk
@@ -42,6 +65,7 @@ msg     tst     sleeping        ; asleep: held back (the last three are kept, in
         bsr     pushline
         leay    b,y
         bra     @line
+@sbok   leas    1,s
 @brk    bsr     pushline        ; the line ends before the space; the next starts after it
         leay    b,y
         leay    1,y

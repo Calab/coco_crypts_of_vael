@@ -551,15 +551,21 @@ mattack ldx     mp
         blo     @hits
         lda     #1              ; (a faint strike mark)
         lbsr    fxstrike
-        ldx     #m_the          ; "THE SKELETON LUNGES FROM BEHIND AND MISSES."
-        lbsr    mbstart
+        ldx     #m_the          ; "THE SKELETON LUNGES AND MISSES." / "THE SKELETON MISSES FROM
+        lbsr    mbstart         ; BEHIND." (agreed: shortened from "LUNGES FROM BEHIND AND MISSES")
         lbsr    mbstr
         lbsr    mbmname
+        tst     mrel
+        bne     @lsd
         ldx     #m_lunges
         lbsr    mbstr
-        lbsr    mbwhere
         ldx     #m_misses
+        bra     @lfr
+@lsd    ldx     #m_missesw
         lbsr    mbstr
+        lbsr    mbwhere
+        ldx     #m_dot
+@lfr    lbsr    mbstr
         lbra    mbsend
 @hits   lbsr    rank            ; your dodge: rank x 5% (13/256), at most half
         ldb     #13
@@ -573,12 +579,17 @@ mattack ldx     mp
         bhs     @struck
         lda     #1              ; (a faint strike mark)
         lbsr    fxstrike
-        lbsr    mbstart         ; "YOU DEFTLY DODGE THE SKELETON FROM BEHIND."
+        lbsr    mbstart         ; "YOU DEFTLY DODGE THE SKELETON." / "YOU DODGE A BLOW FROM BEHIND."
+        tst     mrel            ; (agreed: the reference names it and says where, too long)
+        bne     @dgs
         ldx     #m_dodge2
         lbsr    mbstr
         lbsr    mbmname
+        bra     @dge
+@dgs    ldx     #m_dodgeb
+        lbsr    mbstr
         lbsr    mbwhere
-        ldx     #m_dot
+@dge    ldx     #m_dot
         lbsr    mbstr
         lbra    mbsend
 @struck ldu     mst             ; damage, less a shield's block if it came from in front
@@ -652,6 +663,7 @@ mattack ldx     mp
         clr     vmode
         lda     #1
         sta     vdirty
+        sta     tunereq         ; the lose tune (Steve: it didn't play when a monster killed you)
         ldy     #m_perished
         lbsr    msg
         ldy     #m_restart
@@ -663,7 +675,7 @@ mbmname ldx     mp
         ldb     MKND,x
         lbra    mbmon
 
-* mbwhere: add " FROM YOUR RIGHT" / " FROM BEHIND" / " FROM YOUR LEFT" (mrel 1-3)
+* mbwhere: add " FROM THE RIGHT" / " FROM BEHIND" / " FROM THE LEFT" (mrel 1-3)
 mbwhere ldb     mrel
         beq     @r
         lslb
@@ -709,6 +721,8 @@ c_attack
         clra
         addd    stime
         std     [atkp]
+        inc     <swung           ; (the main loop lets the clock run through the swing's drawing, so
+                                ; the recovery is the reference's in real time: Steve, too slow)
         lda     #SFX_SWING
         lbsr    sfxa
         lbsr    fxswing         ; the picture of the blow

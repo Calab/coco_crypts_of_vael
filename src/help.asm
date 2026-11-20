@@ -1,4 +1,5 @@
-* HELP: the commands on a full screen (view mode 4), as the reference's renderHelp. LOOK puts it away,
+* HELP: the commands on a full screen (view mode 4), as the reference's renderHelp. LOOK or an empty
+* ENTER (editkey in cmd.asm, Steve) puts it away,
 * so does moving or turning (as the pack view); it covers the message log and status rows like a map.
 * The text is in bank BANKSND (src/helptext.asm); each line is copied into sbuf, then printed with
 * BANKCOM mapped (the font).

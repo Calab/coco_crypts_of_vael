@@ -44,7 +44,14 @@ editkey cmpa    #KCR
         bne     @run            ; on the title an empty line means a random seed; after the end, nothing
         tstb
         bne     @keep
-        ldx     #lastcmd        ; empty: repeat the last command
+        lda     vmode           ; empty on the help screen: put it away, as LOOK (Steve)
+        cmpa    #4
+        bne     @again
+        clr     ilen
+        lda     #1
+        sta     cmddirty
+        lbra    c_look
+@again  ldx     #lastcmd        ; empty: repeat the last command
         ldu     #iline
 @rep    lda     ,x+
         sta     ,u+

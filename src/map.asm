@@ -270,6 +270,15 @@ mapdraw lbsr    clrfull
 @arrow  lda     #TXBLUE         ; you: an arrow pointing the way you face, light blue
         lbsr    setcol
         lbsr    arrow
+        inc     mrx             ; again a pixel larger each way: a thicker outline (Steve: it was
+        inc     mry             ; almost invisible)
+        inc     mbx
+        inc     mby
+        lbsr    arrow
+        dec     mrx
+        dec     mry
+        dec     mbx
+        dec     mby
         lsr     mrx             ; and a half-size red one inside it (Steve)
         lsr     mry
         lsr     mbx

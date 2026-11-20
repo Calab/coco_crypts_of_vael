@@ -73,6 +73,9 @@ BANKSCR equ     $3C             ; scratch bank: maze-building buffers (not loade
 BANKLVL equ     $3B             ; level bank: each level's seen cells, 1K per level (not loaded)
 BANKDAT equ     $3D             ; data bank: VAELDATA.DAT (shapes), read from disk at start-up
         setdp   $0D
+keyed   equ     $0D68           ; (direct page, after the sound engine's) this time round the main
+                                ; loop ran a key
+swung   equ     $0D69           ; ATTACK swung: its time counts (c_attack)
 
         org     $0E00
 
@@ -278,10 +281,15 @@ mainloop
         ldd     spin            ; (time spent waiting is the randomness for a blank seed)
         addd    #1
         std     spin
+        clr     <keyed
+        clr     <swung
         lbsr    getkey
         beq     @view           ; no key: but a monster may have moved
         lbsr    editkey
+        tst     <swung           ; (a swing's drawing counts: the arm's recovery is real time, Steve)
+        bne     @view
         bsr     @still          ; (the command's own drawing and working out took no game time)
+        inc     <keyed
 @view   tst     vdirty          ; redraw whenever something changed, key or not
         lbeq    mainloop
         clr     vdirty
@@ -290,11 +298,15 @@ mainloop
         lbsr    paintdirty      ; messages first, then the view
         lbsr    drawframe
         lbsr    tunego          ; the game just ended: its tune, over the end screen
+        tst     <keyed           ; (a redraw for a monster's move is time you spend watching: it counts)
+        lbeq    mainloop
         bsr     @still
         lbra    mainloop
-* The play clock stands still while the CoCo draws and works: the web version draws instantly, so
-* its monsters only get the time you spend looking and typing (Steve: they ganged up when every
-* step's 0.5 s of drawing gave them extra moves). Drop the ticks that passed since gameclock.
+* The play clock stands still while the CoCo works out and draws your command: the web version draws
+* instantly, so its monsters only get the time you spend looking and typing (Steve: they ganged up when
+* every step's 0.5 s of drawing gave them extra moves). Drop the ticks that passed since gameclock.
+* Only for your commands: dropping the redraws monsters cause too froze the clock in a crowd (each
+* move nearby redraws, ~0.3 s that never counted; Steve's slime mould next to him never struck).
 @still  ldd     ticks
         std     lastt
         rts
@@ -382,15 +394,15 @@ newgame lda     #1
 @nv     clr     ,x+
         decb
         bne     @nv
-        lda     #1
-        clrb
+        lbsr    newplayer       ; first: it sets the play clock to 0, and entering the level sets every
+        lda     #1              ; monster's next turn to the clock (after it, an old game's clock left
+        clrb                    ; them all waiting that long: Steve, after SEED)
         lbsr    enterlevel
         lda     #K_DAGGER       ; a dagger at your feet, as the reference's newGame
         sta     ikind
         lda     #1
         tfr     a,b
         lbsr    additem
-        lbsr    newplayer
         ldd     ticks
         std     lastt
         lda     #1

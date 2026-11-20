@@ -171,22 +171,20 @@ k_relic fcn     "RELIC"
 k_crown fcn     "CROWN"
 
 * Item, light, health and experience messages (the reference's)
-m_try   fcn     "TRY: PULL LEFT TORCH, USE LEFT, GET RIGHT DAGGER"
+m_try   fcn     "TRY: PULL L TORCH, USE L, GET R DAGGER"         ; (agreed: shortened to fit)
 m_your  fcn     "YOUR "
 m_gutters fcn   " GUTTERS OUT. DARKNESS."
 m_skilled fcn   "YOU GROW MORE SKILLED!  (RANK "
 m_rparen fcn    ")"
 m_dash  fcn     "YOU DASH YOURSELF AGAINST THE STONE."
 m_perished fcn  "YOUR HEART FALLS SILENT. YOU HAVE PERISHED."
-m_restart fcn   "TYPE RESTART AND PRESS ENTER TO RETURN TO THE TITLE."
+m_restart fcn   "TYPE RESTART TO RETURN TO THE TITLE."  ; (agreed: "AND PRESS ENTER" dropped)
 m_over  fcn     "THE GAME IS OVER. TYPE RESTART TO RETURN TO THE TITLE."
 m_leftright fcn " LEFT OR RIGHT?"
 m_handfull fcn  " HAND IS FULL."
 m_handempty fcn " HAND IS EMPTY."
 m_nothing fcn   "NOTHING LIKE THAT HERE."
 m_youtake fcn   "YOU TAKE THE "
-m_inyour fcn    " IN YOUR "
-m_handdot fcn   " HAND."
 m_youdrop fcn   "YOU DROP THE "
 m_youstow fcn   "YOU STOW THE "
 m_packfull fcn  "YOUR PACK IS FULL."
@@ -202,7 +200,7 @@ m_flares fcn    " FLARES TO LIFE."
 m_warmth fcn    "WARMTH FLOODS YOUR BODY."
 m_stronger fcn  "YOU FEEL STRONGER. YOUR HEART STEADIES."
 m_ancient fcn   "ANCIENT POWER FLOWS INTO YOU."
-m_unfold fcn    "YOU UNFOLD YOUR MAP. (LOOK TO PUT IT AWAY)"
+m_unfold fcn    "YOU UNFOLD YOUR MAP."  ; (agreed: the map says LOOK TO CLOSE)
 m_dark  fcn     "IT IS DARK. YOU CAN BARELY SEE."
 
 * The pack view (the reference's renderPack; its "s" for seconds is "S" here)
@@ -243,7 +241,7 @@ n_hound fcn     "BONE HOUND"
 n_wraith fcn    "ASH WRAITH"
 n_golem fcn     "IRON GOLEM"
 n_king  fcn     "HOLLOW KING"
-m_face  fcn     "YOU ARE FACE TO FACE WITH THE "
+m_face  fcn     "FACE TO FACE WITH THE "        ; (agreed: "YOU ARE" dropped)
 m_bang  fcn     "!"
 m_sleeps fcn    " SLEEPS RIGHT HERE."
 m_inway fcn     " IS IN THE WAY. KILL IT FIRST."
@@ -262,13 +260,15 @@ m_nearby fcn    " NEARBY..."
 m_lunges fcn    " LUNGES"
 m_misses fcn    " AND MISSES."
 m_dodge2 fcn    "YOU DEFTLY DODGE THE "
+m_dodgeb fcn    "YOU DODGE A BLOW"      ; (agreed: side/behind, unnamed as SOMETHING STRIKES)
+m_missesw fcn   " MISSES"               ; (agreed: side/behind, "THE X MISSES FROM THE LEFT.")
 m_something fcn "SOMETHING"
 m_strikes fcn   " STRIKES"
 m_blocked fcn   " (BLOCKED SOME)"
 mwhere  fdb     w_right2,w_behind,w_left2
-w_right2 fcn    " FROM YOUR RIGHT"
+w_right2 fcn    " FROM THE RIGHT"       ; (agreed: was FROM YOUR RIGHT/LEFT)
 w_behind fcn    " FROM BEHIND"
-w_left2 fcn     " FROM YOUR LEFT"
+w_left2 fcn     " FROM THE LEFT"
 m_notready fcn  "YOUR ARM IS NOT READY."
 m_emptyair fcn  "YOU SWING AT EMPTY AIR."
 m_awakens fcn   " AWAKENS!"
@@ -291,16 +291,16 @@ s_wraith fcn    "A HOLLOW MOAN"
 s_golem fcn     "GRINDING IRON"
 s_king  fcn     "A COLD LAUGH"
 mdeaths fdb     d_mould,d_crawler,d_skeleton,d_hound,d_wraith,d_golem,d_king
-d_mould fcn     "DISSOLVES INTO A HISSING PUDDLE!"
-d_crawler fcn   "CURLS UP ITS LEGS AND LIES STILL!"
-d_skeleton fcn  "CRUMBLES INTO A HEAP OF BONES!"
+d_mould fcn     "HISSES INTO A PUDDLE!" ; (agreed: the deaths shortened to fit 40)
+d_crawler fcn   "CURLS UP AND DIES!"
+d_skeleton fcn  "CRUMBLES INTO BONES!"
 d_hound fcn     "CRUMBLES TO DUST!"
-d_wraith fcn    "FADES OUT WITH A LAST SIGH!"
-d_golem fcn     "TUMBLES DOWN WITH A CRASH!"
-d_king  fcn     "COLLAPSES INTO EMPTY ROBES!"
+d_wraith fcn    "FADES WITH A MOAN!"     ; (Steve)
+d_golem fcn     "TUMBLES WITH A CRASH!"
+d_king  fcn     "SINKS INTO EMPTY ROBES!"
 
 * SLEEP (the reference's)
-m_sleephow fcn  "SLEEP HOW LONG? TYPE SLEEP 1 TO SLEEP 20."
+m_sleephow fcn  "SLEEP HOW LONG? TYPE SLEEP 1 TO 20."    ; (agreed: shortened)
 m_tooclose fcn  "YOU CANNOT SLEEP WITH ENEMIES SO CLOSE!"
 m_wakeafter fcn "YOU WAKE AFTER "
 m_move  fcn     " MOVE."
@@ -312,7 +312,7 @@ m_beside fcn    " IS RIGHT BESIDE YOU!"
 m_somebeside fcn "SOMETHING IS RIGHT BESIDE YOU!"
 m_health fcn    "HEALTH "
 m_arrow fcn     " -> "
-m_burnedout fcn " BURNED OUT WHILE YOU SLEPT."
+m_burnedout fcn " WENT OUT AS YOU SLEPT."        ; (agreed: shortened)
 m_tooweak fcn   "YOU ARE STILL TOO WEAK TO STAND..."
 m_neverwake fcn "YOU NEVER WAKE."
 w_strikes fcn   "STRIKES"
