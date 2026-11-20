@@ -77,6 +77,13 @@ keyed   equ     $0D68           ; (direct page, after the sound engine's) this t
                                 ; loop ran a key
 swung   equ     $0D69           ; ATTACK swung: its time counts (c_attack)
 flashcnt equ    $0D6A           ; ticks left of the hurt flash (fxflash; the IRQ counts it down)
+psec    equ     $0D6B           ; play time (playtick): seconds, minutes, hours
+pmin    equ     $0D6C
+phour   equ     $0D6D
+deepest equ     $0D6E           ; the deepest level reached (deepck)
+gwon    equ     $0D6F           ; the game was won (win)
+dwhy    equ     $0D70           ; 2: how you died: the message die was given, or 0 for a monster's blow
+dkind   equ     $0D72           ; ...whose kind is this
 
         org     $0E00
 
@@ -317,7 +324,8 @@ walkdone bra    walkdone        ; the scripted keys ran out
 akeyp   fdb     akeys           ; (the script itself is in the high code, after help.asm: room)
         endc
 
-* sndcopy: copy the sound engine's image (the start of bank BANKSND, from the data file) up to $FC00
+* sndcopy: copy the sound engine's image (the start of bank BANKSND, from the data file) up to $FC00,
+* and the low code (offset $0300) down to $0000
 sndcopy lda     #BANKSND
         sta     MMUT0+6
         ldx     #BANKWIN
@@ -326,6 +334,12 @@ sndcopy lda     #BANKSND
         std     ,u++
         cmpu    #sndres_end
         blo     @copy
+        ldx     #BANKWIN+$300   ; and the low code down to $0000 (low.asm)
+        ldu     #0
+@low    ldd     ,x++
+        std     ,u++
+        cmpu    #lowcend
+        blo     @low
         lda     #BANKCOM
         sta     MMUT0+6
         rts
@@ -452,6 +466,7 @@ enterlevel
         puls    a
 @first  lbsr    mklevel         ; (its maze is the same every time; its items are placed afresh)
         lbsr    seenload
+        lbsr    deepck          ; (the end screen's deepest depth)
         ldx     #lvlvis         ; been here before? then its items are as you left them
         ldb     mz_lvl
         decb
@@ -715,6 +730,7 @@ drawframe
 @drawn  ldd     ticks
         subd    t0
         std     lastdraw
+        lbsr    endpanel        ; the game over: its panel over the view
         lda     pending         ; a Y/N question, or PAUSED, goes over the middle of the view
         ora     paused
         beq     @noq
@@ -922,6 +938,15 @@ akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
 highend
         ifgt    highend-$FC00
         error   "high code is past $FBFF (its load copy must end below $7C00)"
+        endc
+
+* ---- Low code ($0000-$00FF, block $38): carried by the data file at offset $0300 of BANKSND,
+* copied down by sndcopy ----
+        org     $0000
+        include "low.asm"
+lowcend
+        ifgt    lowcend-$0100
+        error   "low code is past $00FF"
         endc
 
 * ---- The sound engine ($FC00-$FEED): carried by the data file, copied up by sndcopy ----

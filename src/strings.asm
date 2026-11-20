@@ -324,3 +324,13 @@ m_sndoff fcn    "SOUND OFF."
 m_sndvol fcn    "SOUND VOLUME "
 m_sndon fcn     "SOUND ON, VOLUME "
 m_sndrange fcn  " (0-9)."
+
+* The end screen (the reference's renderEnd, in 40 columns: its cause line's "ON DEPTH n" moved to the
+* numbers, and its long line of numbers split in two; best times left out, as agreed)
+e_perish fcn    "YOU HAVE PERISHED"
+e_victory fcn   "VICTORY"
+e_slain fcn     "SLAIN BY "
+e_yours fcn     " IS YOURS"
+e_time  fcn     "TIME "
+e_deep  fcn     "   DEEPEST "
+e_restart fcn   "TYPE RESTART AND PRESS ENTER"

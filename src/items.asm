@@ -42,6 +42,7 @@ newplayer
         std     nextwarn
         std     nextsound
         std     nextcry         ; (left from an earlier game it could be minutes ahead: no cries)
+        lbsr    endreset        ; the end screen's numbers
         std     atkready
         std     atkready+2
         std     hbnext
@@ -130,7 +131,8 @@ gameclock
 @ret    rts
 
 * second: one second of play: the light burns
-second  tst     vlight
+second  lbsr    playtick        ; (the end screen's play time)
+        tst     vlight
         beq     @ret
         ldd     lrem
         subd    #1
@@ -206,7 +208,8 @@ hurt    pshs    d
         rts
 
 * die: Y = why. The reference's die: the end of the game; only RESTART (or QUIT) goes on.
-die     lbsr    msg
+die     sty     <dwhy           ; (the end screen shows it)
+        lbsr    msg
         ldy     #m_perished
         lbsr    msg
         ldy     #m_restart

@@ -667,6 +667,11 @@ mattack ldx     mp
         lda     #1
         sta     vdirty
         sta     tunereq         ; the lose tune (Steve: it didn't play when a monster killed you)
+        ldx     mp              ; (the end screen: slain by this one)
+        ldb     MKND,x
+        stb     <dkind
+        clr     <dwhy
+        clr     <dwhy+1
         ldy     #m_perished
         lbsr    msg
         ldy     #m_restart
@@ -907,6 +912,7 @@ c_xxx   ldd     px
 * win: the crown in your hand (the reference's win)
 win     lda     #2              ; the win tune
         sta     tunereq
+        inc     <gwon
         ldy     #m_won
         lbsr    msg
         ldy     #m_restart

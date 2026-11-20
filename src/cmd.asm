@@ -1000,6 +1000,167 @@ gmode   fcb     0               ; 0 title, 1 playing, 2 the game is over
 spin    fdb     0               ; counts while waiting for keys (randomness for a blank seed)
 mvmode  fcb     0               ; c_move: glide forward / back / sideways
 
+
+* ---- the end screen (the reference's renderEnd) ----
+* endpanel: (drawframe) once the game is over, on the view (not a map, the pack or the help): a band
+* across the middle with what happened and the run's numbers
+endpanel
+        lda     gmode
+        cmpa    #2
+        lbne    @r
+        tst     vmode
+        lbne    @r
+        lda     #TXGREEN
+        sta     textmask
+        clr     obuf
+        lda     #4              ; clear text rows 4-13
+@clr    pshs    a
+        ldy     #obuf
+        lbsr    rowstr
+        puls    a
+        inca
+        cmpa    #14
+        blo     @clr
+        ldy     #e_perish       ; YOU HAVE PERISHED (red) / VICTORY (light blue)
+        lda     #TXRED
+        tst     <gwon
+        beq     @t
+        ldy     #e_victory
+        lda     #TXBLUE
+@t      sta     textmask
+        lda     #5
+        lbsr    center
+        lda     #TXGREEN
+        sta     textmask
+        lbsr    mbstart         ; how: THE EMBER CROWN IS YOURS / SLAIN BY THE ... / die's message
+        tst     <gwon
+        beq     @dead
+        ldx     #m_the
+        lbsr    mbstr
+        ldx     #n_crown
+        lbsr    mbstr
+        ldx     #e_yours
+        bra     @how
+@dead   ldx     <dwhy
+        bne     @how
+        ldx     #e_slain
+        lbsr    mbstr
+        ldx     #m_the
+        lbsr    mbstr
+        ldb     <dkind
+        lbsr    mbmon
+        bra     @how2
+@how    lbsr    mbstr
+@how2   lda     #7
+        lbsr    @send
+        lbsr    mbstart         ; TIME m:ss (h:mm:ss)   FOES SLAIN n   RANK n
+        ldx     #e_time
+        lbsr    mbstr
+        ldb     <phour
+        beq     @nh
+        clra
+        lbsr    mbnum
+        lbsr    @colon
+        ldb     <pmin
+        lbsr    @two
+        bra     @sec
+@nh     clra
+        ldb     <pmin
+        lbsr    mbnum
+@sec    bsr     @colon
+        ldb     <psec
+        lbsr    @two
+        ldx     #m_slain
+        lbsr    mbstr
+        clra
+        ldb     kills
+        lbsr    mbnum
+        ldx     #m_sp3
+        lbsr    mbstr
+        ldx     #m_rank
+        lbsr    mbstr
+        lbsr    rank
+        tfr     a,b
+        clra
+        lbsr    mbnum
+        lda     #9
+        lbsr    @send
+        lbsr    mbstart         ; DEPTH n   DEEPEST n   SEED n
+        ldx     #s_depth
+        lbsr    mbstr
+        clra
+        ldb     mz_lvl
+        lbsr    mbnum
+        ldx     #e_deep
+        lbsr    mbstr
+        clra
+        ldb     <deepest
+        lbsr    mbnum
+        ldx     #m_seedsp
+        lbsr    mbstr
+        ldd     seed
+        std     num32
+        ldd     seed+2
+        std     num32+2
+        lbsr    mbnum32
+        lda     #10
+        lbsr    @send
+        lda     #TXBLUE
+        sta     textmask
+        lda     #12
+        ldy     #e_restart
+        lbra    center
+@send   ldu     mbp             ; the message being built, centred on row A
+        clr     ,u
+        ldy     #mbuf
+        lbra    center
+@colon  ldu     mbp
+        lda     #':
+        sta     ,u+
+        stu     mbp
+@r      rts
+@two    lda     #'0-1           ; B = 0-59 as two digits
+@ten    inca
+        subb    #10
+        bhs     @ten
+        addb    #'0+10
+        ldu     mbp
+        sta     ,u+
+        stb     ,u+
+        stu     mbp
+        rts
+
+* playtick: (gameclock, each second of play) the play time
+playtick
+        inc     <psec
+        lda     <psec
+        cmpa    #60
+        blo     @r
+        clr     <psec
+        inc     <pmin
+        lda     <pmin
+        cmpa    #60
+        blo     @r
+        clr     <pmin
+        inc     <phour
+@r      rts
+
+* deepck: (enterlevel) the deepest level reached
+deepck  lda     mz_lvl
+        cmpa    <deepest
+        bls     @r
+        sta     <deepest
+@r      rts
+
+* endreset: (newplayer) a new game's end screen numbers
+endreset
+        clr     <psec
+        clr     <pmin
+        clr     <phour
+        clr     <deepest
+        clr     <gwon
+        rts
+
 * overlay: the Y/N question in the middle of the view, drawn on the page being drawn after the view
 * (the reference's dark box with the question and its two answers)
 overlay lda     #TXGREEN
