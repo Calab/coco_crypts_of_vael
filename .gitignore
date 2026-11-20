@@ -1,0 +1,18 @@
+# Build output (make rebuilds all of it)
+build/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Not published: the web version the port follows (make shapes and make mazecheck read it), and
+# working notes
+reference/
+prompts.txt
+remove_basic.txt
+
+# Editor and system files
+.vscode/
+*.swp
+*~
+.DS_Store

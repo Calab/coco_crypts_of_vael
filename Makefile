@@ -37,7 +37,7 @@ PYTHON  = python3
 
 BUILD   = build
 SRC     = src
-SHOTDIR = /home/steve/tmp
+SHOTDIR = $(HOME)/tmp
 
 DISK        = $(BUILD)/vael.dsk
 XROAR_FLAGS = -machine coco3 -ram 128 -load-fd0 $(DISK)
