@@ -933,8 +933,8 @@ packview
 * paintstat: row 21: "L: item" from the left, "R: item" ending at the right (held items light blue,
 * empty hands green, as the reference's yellow / green), and in the middle the heart (columns 15-16,
 * red) and HP (from column 17). An item name over 12 letters shows its kind word instead
-* (none do now; MENDING BREW was renamed to fit). Row 22: RANK and XP under the health, WINDED /
-* EXHAUSTED at the right. Blank on the title.
+* (none do now; MENDING BREW was renamed to fit). Row 22: RANK and XP centred, WINDED / EXHAUSTED at
+* the right. Blank on the title.
 HEARTCOL equ    15
 paintstat
         ldx     #sbuf
@@ -953,7 +953,7 @@ paintstat
 @play   clra                    ; left hand
         lbsr    @hand
         lda     #1              ; right hand
-        bsr     @hand
+        lbsr    @hand
         lbsr    mbstart         ; HP
         ldd     hp
         lbsr    mbnum
@@ -969,8 +969,8 @@ paintstat
         ldy     #mbuf
         lbsr    printat
         lbsr    drawheart
-        lbsr    mbstart         ; row 22, under the health: RANK n  XP n (the reference's, in its
-        ldx     #m_rank         ;   item colour: our light blue)
+        lbsr    mbstart         ; row 22, centred: RANK n  XP n (the reference's, in its item
+        ldx     #m_rank         ;   colour: our light blue)
         lbsr    mbstr
         lbsr    rank
         tfr     a,b
@@ -984,7 +984,12 @@ paintstat
         clr     ,u
         lda     #TXBLUE
         sta     textmask
-        ldd     #(STATROW<<8)|HEARTCOL
+        tfr     u,d             ; centred on the row (Steve): column (40 - length) / 2
+        subd    #mbuf
+        negb
+        addb    #40
+        lsrb
+        lda     #STATROW
         ldy     #mbuf
         lbsr    printat
         lbsr    fatlevel        ; and WINDED / EXHAUSTED at the right

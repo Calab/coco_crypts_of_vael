@@ -13,6 +13,7 @@
 *                     walkdone (for timing and screenshots)
 
         include "gime.inc"
+        include "fxid.inc"      ; attack picture numbers (tools/mkfx.py)
         include "data.sym"      ; addresses in the data file (build/data.sym, from src/data.asm)
 
 SCRCPU  equ     $4000           ; where the page being drawn is mapped (CPU $4000-$BFFF)
@@ -272,6 +273,7 @@ mainloop
         lbsr    gameclock       ; seconds of play: the light burns
         lbsr    simulate        ; fatigue, healing, fainting, the monsters
         lbsr    heartbeat       ; the heart on the status row
+        lbsr    fxtick          ; an attack picture's time up?
         lbsr    paintdirty      ; text rows that changed
         ldd     spin            ; (time spent waiting is the randomness for a blank seed)
         addd    #1
@@ -322,6 +324,7 @@ tunego  lda     tunereq
         beq     @r
         clr     tunereq
         lbsr    sndoff          ; (the tune drives the DAC itself)
+        lbsr    flashoff        ; (and the main loop, which ends a hurt flash, stops while it plays)
         ldb     #BANKDAT
         stb     MMUT0+6
         jsr     tuneplay
@@ -678,6 +681,7 @@ drawframe
         lbsr    clrview
         bra     @drawn
 @see    lbsr    render
+        lbsr    fxdraw          ; an attack picture over it
         tst     vlight          ; no light: the reference's "IT IS DARK" at the top of the view
         bne     @drawn
         lda     #TXGREEN
@@ -878,6 +882,7 @@ progend
         include "maze.asm"
         include "cmd.asm"
         include "map.asm"
+        include "attack.asm"
 highend
         ifgt    highend-$FC00
         error   "high code is past $FBFF (its load copy must end below $7C00)"

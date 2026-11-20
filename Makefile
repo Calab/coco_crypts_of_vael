@@ -51,7 +51,7 @@ ASM = $(LWASM) --format=decb -I $(SRC) -I $(BUILD) --symbols
 define variant
 	$(PYTHON) tools/relocate.py $(BUILD)/$(1).raw $(BUILD)/$(1).bin $(BUILD)/$(1).res $(BUILD)/$(1).ovl
 	$(PYTHON) tools/joindata.py $(BUILD)/$(1).dat $(BUILD)/data.dat $(BUILD)/$(1).res $(BUILD)/sndbank.dat \
-	    $(BUILD)/$(1).ovl
+	    $(BUILD)/$(1).ovl $(BUILD)/fx.dat
 	$(PYTHON) tools/mkdsk.py $(BUILD)/$(1).dsk VAEL.BIN=$(BUILD)/$(1).bin VAELDATA.DAT=$(BUILD)/$(1).dat:1 >/dev/null
 endef
 VFLAGS = -machine coco3 -ram 128 -ui null -ao null -no-ratelimit
@@ -80,14 +80,19 @@ $(BUILD)/data.dat $(BUILD)/data.sym: $(SRC)/data.asm $(SRC)/icons.asm $(SRC)/mon
     $(SRC)/tune.asm $(BUILD)/tunes.asm | $(BUILD)
 	$(LWASM) --6809 --format=raw -I $(SRC) -I $(BUILD) --list=$(BUILD)/data.lst --symbol-dump=$(BUILD)/data.sym -o $(BUILD)/data.dat $(SRC)/data.asm
 
+# Bank $3E's attack pictures (src/fxpics.asm, from tools/mkfx.py)
+$(BUILD)/fx.dat: $(SRC)/fxpics.asm | $(BUILD)
+	$(LWASM) --format=raw -o $@ $(SRC)/fxpics.asm
+
 # Bank $3E's sound effects
 $(BUILD)/sndbank.dat: $(SRC)/sndbank.asm $(BUILD)/sfx.asm | $(BUILD)
 	$(LWASM) --format=raw -I $(SRC) -I $(BUILD) -o $@ $(SRC)/sndbank.asm
 
 # The data file: bank $3D, then bank $3E (the sound engine's image from vael.bin's build, the sounds,
 # the level generator overlay)
-$(BUILD)/vaeldata.dat: $(BUILD)/data.dat $(BUILD)/vael.bin $(BUILD)/sndbank.dat tools/joindata.py
-	$(PYTHON) tools/joindata.py $@ $(BUILD)/data.dat $(BUILD)/vael.res $(BUILD)/sndbank.dat $(BUILD)/vael.ovl
+$(BUILD)/vaeldata.dat: $(BUILD)/data.dat $(BUILD)/vael.bin $(BUILD)/sndbank.dat $(BUILD)/fx.dat tools/joindata.py
+	$(PYTHON) tools/joindata.py $@ $(BUILD)/data.dat $(BUILD)/vael.res $(BUILD)/sndbank.dat $(BUILD)/vael.ovl \
+	    $(BUILD)/fx.dat
 
 # Assemble, then move the banked parts to load addresses LOADM can use (tools/relocate.py)
 # DEFS: extra lwasm options for trying things, e.g. make -B run DEFS=-DLADCOL=175 (-B forces a rebuild;
@@ -106,7 +111,7 @@ run: $(DISK)
 run-cmp: $(DISK)
 	$(XROAR) $(XROAR_FLAGS) $(AO) -tv-input cmp -run $(BUILD)/vael.bin
 
-shot: $(SOURCES) $(DISK) | $(BUILD)
+shot: $(SOURCES) $(DISK) $(BUILD)/fx.dat | $(BUILD)
 	$(ASM) -D AUTOMON=$$(printf '%d' "'$(strip $(SHOT_MON))") $(SHOT_DEFS) --list=$(BUILD)/shot.lst \
 	    --symbol-dump=$(BUILD)/shot.sym -o $(BUILD)/shot.raw $(SRC)/main.asm
 	$(call variant,shot)
@@ -141,6 +146,7 @@ shapes: | $(BUILD)
 	$(PYTHON) tools/mkicons.py $(BUILD)/icons.json $(SRC)/icons.asm
 	gjs -m tools/refshapes.js SHAPE > $(BUILD)/shapes.json
 	$(PYTHON) tools/mkicons.py $(BUILD)/shapes.json $(SRC)/monsters.asm --monsters
+	$(PYTHON) tools/mkfx.py $(BUILD)/icons.json $(SRC)/fxpics.asm $(SRC)/fxid.inc
 
 keys: | $(BUILD)
 	printf '        fcc     "%s"\n' "$(KEYS)" > $(BUILD)/autokeys.inc

@@ -549,6 +549,8 @@ mattack ldx     mp
         lbsr    rand            ; does it hit?
         cmpa    2,u
         blo     @hits
+        lda     #1              ; (a faint strike mark)
+        lbsr    fxstrike
         ldx     #m_the          ; "THE SKELETON LUNGES FROM BEHIND AND MISSES."
         lbsr    mbstart
         lbsr    mbstr
@@ -569,6 +571,8 @@ mattack ldx     mp
         lbsr    rand
         cmpa    etmp
         bhs     @struck
+        lda     #1              ; (a faint strike mark)
+        lbsr    fxstrike
         lbsr    mbstart         ; "YOU DEFTLY DODGE THE SKELETON FROM BEHIND."
         ldx     #m_dodge2
         lbsr    mbstr
@@ -609,6 +613,11 @@ mattack ldx     mp
         inc     mblock
 @dmg    lda     #SFX_HURT
         lbsr    sfxa
+        lda     mblock          ; the strike mark: a hit (0) or blocked (2: sparks too)
+        lsla
+        lbsr    fxstrike
+        ldb     #5              ; the flash (80 ms: half the reference's 160, Steve)
+        lbsr    fxflash
         ldd     stime
         std     lasthurt
         std     laststruck
@@ -702,6 +711,7 @@ c_attack
         std     [atkp]
         lda     #SFX_SWING
         lbsr    sfxa
+        lbsr    fxswing         ; the picture of the blow
         ldd     hp              ; swinging is exertion
         cmpd    #1
         bls     @find
