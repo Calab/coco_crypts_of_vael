@@ -744,7 +744,11 @@ showpage
         puls    a,pc
 
 * irqinit: count frames in ticks with the GIME's vertical border interrupt
-irqinit lda     #$7E            ; JMP irqh at the CoCo 3's IRQ vector
+irqinit ldx     #$0D68          ; first: the direct page's game variables (heartbeat, flash, ...) to 0.
+@z      clr     ,x+             ;   The page holds Disk BASIC's leftovers: on a real CoCo a stray hbon
+        cmpx    #$0E00          ;   and period made the IRQ's heartbeat (hbtick) beat on nearly every
+        blo     @z              ;   tick, a grumble after R / C (Steve; XRoar's leftovers are harmless)
+        lda     #$7E            ; JMP irqh at the CoCo 3's IRQ vector
         sta     $FEF7
         ldx     #irqh
         stx     $FEF8
