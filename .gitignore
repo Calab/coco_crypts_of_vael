@@ -1,5 +1,6 @@
-# Build output (make rebuilds all of it)
+# Build output (make rebuilds all of it); dist/ holds the disk image to hand out
 build/
+dist/
 
 # Python caches
 __pycache__/

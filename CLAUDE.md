@@ -466,7 +466,8 @@ with CMOC is allowed for non-critical parts if it saves time. Line drawing and s
   (light blue). Best times left out (agreed). Kept in the direct page: `psec`/`pmin`/`phour` (`playtick`
   from `second`), `deepest` (`deepck` from `enterlevel`), `gwon` (`win`), `dwhy` (`die`'s Y; 0 = a
   monster's blow) and `dkind` (`mattack`); `endreset` (from `newplayer`) clears them.
-- **The disk (2026-11-20):** `build/vael.dsk` (VAEL.BIN, VAELDATA.DAT) boots on a real BASIC path: tested
+- **The disk (2026-11-20):** `make` builds `build/vael.dsk` and copies it to **`dist/crypts-of-vael.dsk`**,
+  the copy Steve hands out (git-ignored; Steve, 2026-11-20: not `~/tmp` any more). It boots on a real BASIC path: tested
   headless with `xroar -load-fd0 build/vael.dsk -type 'LOADM"VAEL":EXEC\r'` and a trap at `askmon`. A BASIC
   loader (`RUN"VAEL"`) **can't work**: a running BASIC program sits at about `$0E00`–`$2600`, which LOADM
   overwrites, so the rest of its line is garbage (`?SN ERROR`). (`mkdsk.py` can still store ASCII

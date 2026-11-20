@@ -30,7 +30,7 @@ Or an emulator such as [XRoar](https://www.6809.org.uk/xroar/) or MAME, set up a
 
 ### Starting the game
 
-The disk (`vael.dsk`) holds two files, `VAEL.BIN` and `VAELDATA.DAT`; both must be on the same disk.
+The disk image (`crypts-of-vael.dsk`) holds two files, `VAEL.BIN` and `VAELDATA.DAT`; both must be on the same disk.
 At the `OK` prompt type:
 
 ```
@@ -95,7 +95,7 @@ A few tips:
 ### Commands
 
 ```
-make            # build build/vael.dsk (VAEL.BIN and VAELDATA.DAT)
+make            # build the disk image: dist/crypts-of-vael.dsk (VAEL.BIN and VAELDATA.DAT)
 make run        # run it in XRoar on an RGB monitor
 make run-cmp    # run it in XRoar on a composite monitor
 make clean

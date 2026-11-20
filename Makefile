@@ -1,6 +1,7 @@
 # Crypts of Vael - CoCo 3 build
 #
-#   make            build build/vael.dsk: VAEL.BIN (the game) and VAELDATA.DAT (its data file)
+#   make            build build/vael.dsk: VAEL.BIN (the game) and VAELDATA.DAT (its data file),
+#                   and copy it to dist/crypts-of-vael.dsk, the copy to hand out
 #                   (on a CoCo: LOADM"VAEL":EXEC)
 #   make run        run it in XRoar on an RGB monitor (window), with the disk in drive 0
 #   make run-cmp    run it in XRoar on a composite monitor (window)
@@ -40,6 +41,7 @@ SRC     = src
 SHOTDIR = $(HOME)/tmp
 
 DISK        = $(BUILD)/vael.dsk
+DIST        = dist/crypts-of-vael.dsk
 XROAR_FLAGS = -machine coco3 -ram 128 -load-fd0 $(DISK)
 SHOT_AT   ?= framedone   # symbol where the headless run takes its snapshot
 SHOT_N    ?= 1           # ...on the N'th time it gets there
@@ -64,7 +66,11 @@ define variant
 endef
 VFLAGS = -machine coco3 -ram 128 -ui null -ao null -no-ratelimit
 
-all: $(DISK)
+all: $(DIST)
+
+$(DIST): $(DISK)
+	@mkdir -p $(dir $@)
+	cp $< $@
 
 $(BUILD):
 	mkdir -p $@
@@ -194,6 +200,6 @@ profile: $(SOURCES) $(DISK) | $(BUILD)
 	rm -f $(BUILD)/trace.txt
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) dist
 
 .PHONY: all run run-cmp shot fontshot askshot walk mazecheck keys shapes tunes sfx tunetime profile clean
