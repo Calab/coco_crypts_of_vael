@@ -150,7 +150,7 @@ shapes: | $(BUILD)
 
 keys: | $(BUILD)
 	printf '        fcc     "%s"\n' "$(KEYS)" > $(BUILD)/autokeys.inc
-	$(MAKE) shot SHOT_DEFS=-DAUTOKEYS SHOT_AT=walkdone SHOT_NAME=keys
+	$(MAKE) shot SHOT_DEFS="-DAUTOKEYS $(SHOT_DEFS)" SHOT_AT=walkdone SHOT_NAME=keys
 
 tunes: | $(BUILD)
 	@mkdir -p $(SHOTDIR)

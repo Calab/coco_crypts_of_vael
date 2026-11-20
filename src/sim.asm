@@ -356,9 +356,8 @@ monsters
         blt     @near
         inc     mchase
         bra     @opts
-@near   ldb     mz_lvl          ; within 14 + 2 x depth steps
-        lslb
-        addb    #14
+@near   ldb     mz_lvl          ; within 6 + depth steps (Steve, 2026-11-20: the reference's 14 + 2 x
+        addb    #6              ; depth drew most of the level onto you)
         clra
         cmpd    mdist
         blt     @opts
@@ -595,6 +594,10 @@ mattack ldx     mp
 @struck ldu     mst             ; damage, less a shield's block if it came from in front
         lda     3,u
         ldb     4,u
+        ifdef   BIGHIT          ; (testing: every blow 20-30, e.g. to be killed quickly)
+        lda     #20
+        ldb     #30
+        endc
         lbsr    rndab
         sta     mdmg
         clr     mblock

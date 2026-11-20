@@ -76,6 +76,7 @@ BANKDAT equ     $3D             ; data bank: VAELDATA.DAT (shapes), read from di
 keyed   equ     $0D68           ; (direct page, after the sound engine's) this time round the main
                                 ; loop ran a key
 swung   equ     $0D69           ; ATTACK swung: its time counts (c_attack)
+flashcnt equ    $0D6A           ; ticks left of the hurt flash (fxflash; the IRQ counts it down)
 
         org     $0E00
 
@@ -313,9 +314,7 @@ mainloop
         endc
         ifdef   AUTOKEYS
 walkdone bra    walkdone        ; the scripted keys ran out
-akeyp   fdb     akeys
-akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
-        fcb     0
+akeyp   fdb     akeys           ; (the script itself is in the high code, after help.asm: room)
         endc
 
 * sndcopy: copy the sound engine's image (the start of bank BANKSND, from the data file) up to $FC00
@@ -814,7 +813,13 @@ irqh    lda     IRQENR          ; acknowledge
         ldx     ticks
         leax    1,x
         stx     ticks
-        lbsr    kbscan          ; the keyboard
+        lda     <flashcnt       ; a hurt flash's last tick: the black back (fxflash)
+        beq     @k
+        dec     <flashcnt
+        bne     @k
+        lda     palsh
+        sta     PALETTE
+@k      lbsr    kbscan          ; the keyboard
         rti
 
 * printat: A = row, B = column, Y = string
@@ -910,6 +915,10 @@ progend
         include "map.asm"
         include "attack.asm"
         include "help.asm"
+        ifdef   AUTOKEYS
+akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
+        fcb     0
+        endc
 highend
         ifgt    highend-$FC00
         error   "high code is past $FBFF (its load copy must end below $7C00)"
@@ -937,9 +946,10 @@ ovlend
         include "tables.asm"
         include "strings.asm"
         include "crylv.asm"
+        include "status.asm"
 bankcomend
-        ifgt    bankcomend-(BANKWIN+$2000)
-        error   "common bank is over 8K"
+        ifgt    bankcomend-SROW
+        error   "common bank runs into SROW (the status rows' buffer at its top)"
         endc
 
 * ---- Scratch bank (block BANKSCR at $C000-$DFFF while mklevel runs): not loaded ----

@@ -555,10 +555,10 @@ pixaddr ldb     <ly0
         ldu     #pixmask
         lda     b,u
         sta     <lmask
-        lda     <lcolb          ; colour for this row: as set on even rows, swapped on odd
-        ldb     <lcolsw
-        lsr     <ly0
-        rol     <ly0            ; (restores ly0; carry = its low bit)
+        lda     <ly0            ; colour for this row: as set on even rows, swapped on odd
+        lsra                    ; (carry = the row's low bit; the loads below keep it. It was
+        lda     <lcolb          ; lsr + rol ly0, which left bit 7 in the carry: every row "even",
+        ldb     <lcolsw         ; so filled mixed colours came out in vertical stripes: Steve)
         bcc     @even
         exg     a,b
 @even   sta     <lcol

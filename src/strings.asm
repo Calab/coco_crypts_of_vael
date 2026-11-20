@@ -124,7 +124,9 @@ m_fullmap fcn   "FULL MAZE - DEPTH "    ; (reference: "FULL MAZE (TEST VIEW) - D
 m_sp3   fcn     "   "
 m_foes  fcn     " FOES  "
 m_itemsn fcn    " ITEMS"
-m_maplegend fcn "V = DOWN  ^ = UP           LOOK TO CLOSE"   ; (ours: the reference colours V/^ instead)
+m_ldown fcn     "DOWN"          ; (ours: the map legend, left of the maze, with the marks; Steve)
+m_lup   fcn     "UP"
+m_lyou  fcn     "YOU"
 m_mapclose fcn  "                           LOOK TO CLOSE"
 
 * Item names (the reference's ITEMS), by kind number

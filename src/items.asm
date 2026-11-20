@@ -23,8 +23,11 @@ itype   fcb     T_WEAPON,T_WEAPON,T_WEAPON,T_WEAPON,T_WEAPON,T_SHIELD,T_SHIELD
 * no light
 newplayer
         ldd     #100
-        std     hp
         std     maxhp
+        ifdef   STARTHP         ; (testing: start weak, e.g. to be killed quickly)
+        ldd     #STARTHP
+        endc
+        std     hp
         ldd     #0
         std     xp
         std     acc
@@ -932,20 +935,10 @@ packview
 * (none do now; MENDING BREW was renamed to fit). Row 22: RANK and XP centred, WINDED / EXHAUSTED at
 * the right. Blank on the title.
 HEARTCOL equ    15
-paintstat
-        ldx     #sbuf
-        clr     ,x
-        lda     #TXGREEN
-        sta     textmask
-        lda     #HANDROW
-        ldy     #sbuf
-        lbsr    rowstr
-        lda     #STATROW
-        ldy     #sbuf
-        lbsr    rowstr
+paintstat                       ; (built in SROW, then drawn a cell at a time: status.asm)
+        lbsr    sclear
         lda     gmode
-        bne     @play
-        rts
+        lbeq    sflush
 @play   clra                    ; left hand
         lbsr    @hand
         lda     #1              ; right hand
@@ -963,8 +956,8 @@ paintstat
         sta     textmask
         ldd     #(HANDROW<<8)|(HEARTCOL+2)
         ldy     #mbuf
-        lbsr    printat
-        lbsr    drawheart
+        lbsr    sprint
+        lbsr    sheart
         lbsr    mbstart         ; row 22, centred: RANK n  XP n (the reference's, in its item
         ldx     #m_rank         ;   colour: our light blue)
         lbsr    mbstr
@@ -987,7 +980,7 @@ paintstat
         lsrb
         lda     #STATROW
         ldy     #mbuf
-        lbsr    printat
+        lbsr    sprint
         lbsr    fatlevel        ; and WINDED / EXHAUSTED at the right
         tsta
         beq     @ret
@@ -1000,8 +993,8 @@ paintstat
 @fw     lda     #TXGREEN
         sta     textmask
         lda     #STATROW
-        lbra    printat
-@ret    rts
+        lbsr    sprint
+@ret    lbra    sflush
 @hand   sta     ch              ; A = hand: "L: name" / "R: name"
         lbsr    mbstart
         ldx     #m_lcolon
@@ -1044,7 +1037,7 @@ paintstat
 @left   clrb
 @put    lda     #HANDROW
         ldy     #mbuf
-        lbra    printat
+        lbra    sprint
 
 * drawheart: the heart at row 21, columns 15-16, on the page mapped: big while it beats, else
 * the smaller one (and the smaller one, still, once the game is over)

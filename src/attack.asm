@@ -87,41 +87,39 @@ fxset   tst     sleeping        ; (nothing to see while asleep)
 @r      rts
 
 * fxflash: (when you're hurt) the reference's flash, the view washed with colour for a moment. Here
-* the black (palette entry 0) turns dim yellow for B ticks (Steve's colour; the reference's is its
-* green): no drawing, so it costs nothing.
-FLASHRGB equ    $06             ; dim yellow on RGB (low red + low green)
-FLASHCMP equ    $04             ; composite: low intensity, hue 4 (between green 2 and red 7)
+* the black (palette entry 0) turns orange for B ticks (Steve's colour; the reference's is its green):
+* no drawing, so it costs nothing. The 60 Hz interrupt (irqh) counts it down and puts the black back,
+* so it lasts B ticks exactly even while the main loop is busy drawing (Steve: from the main loop it
+* stayed up for the whole 0.1-0.3 s redraw).
+FLASHRGB equ    $22             ; orange on RGB (34: red 2, green 1; Steve. Was dim yellow $06)
+FLASHCMP equ    $06             ; composite: low intensity, hue 6 (between yellow 4 and red 7; to check)
 fxflash tst     sleeping
         bne     @r
-        clra
-        addd    ticks
-        std     flashend
         lda     #FLASHRGB
+        pshs    b
         ldb     monitor
         cmpb    #'C
+        puls    b
         bne     @c
         lda     #FLASHCMP
 @c      sta     PALETTE
-        sta     flashon
+        stb     <flashcnt
 @r      rts
 
-* flashoff: the black back (before a tune, which stops the main loop)
+* flashoff: the black back at once (before a tune, which stops the interrupts). Keeps A (tunego holds
+* the tune number in it: losing it crashed the lose tune after a monster's killing blow).
 flashoff
-        tst     flashon
+        tst     <flashcnt
         beq     @r
-        clr     flashon
+        clr     <flashcnt
+        pshs    a
         lda     palsh
         sta     PALETTE
+        puls    a
 @r      rts
 
-* fxtick: (main loop) take the flash and the picture down when their time is up
-fxtick  tst     flashon
-        beq     @p
-        ldd     ticks
-        subd    flashend
-        bmi     @p
-        bsr     flashoff
-@p      tst     fxon
+* fxtick: (main loop) take the picture down when its time is up (the flash ends in irqh)
+fxtick  tst     fxon
         beq     @r
         ldd     ticks
         subd    fxuntil
@@ -211,8 +209,6 @@ fxpic1  stb     fxfl
         sta     MMUT0+6
         rts
 
-flashon fcb     0               ; the hurt flash is on
-flashend fdb    0
 fxon    fcb     0               ; a picture is up
 fxpic   fcb     0
 fxflip  fcb     0

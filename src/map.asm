@@ -7,7 +7,7 @@
 *   seensave / seenload / seenclear   each level's seen cells live in BANKLVL between visits
 *
 * Colours: walls green (unseen ones in 50% dots), ladders the red/green mix as in the corridor (V down,
-* ^ up), you a light blue arrow. Items (blue/green diamonds) and monsters (red letters) come later.
+* ^ up), you a light blue arrow; a legend of those three left of the maze. Items (diamonds) and monsters (red letters) on REVEAL.
 
 * markseen: as the reference: each open cell straight ahead within the light range, and the cells
 * either side of it
@@ -267,25 +267,12 @@ mapdraw lbsr    clrfull
         bne     @arrow
         lbsr    diamonds
         lbsr    monletters
-@arrow  lda     #TXBLUE         ; you: an arrow pointing the way you face, light blue
-        lbsr    setcol
-        lbsr    arrow
-        inc     mrx             ; again a pixel larger each way: a thicker outline (Steve: it was
-        inc     mry             ; almost invisible)
-        inc     mbx
-        inc     mby
-        lbsr    arrow
-        dec     mrx
-        dec     mry
-        dec     mbx
-        dec     mby
-        lsr     mrx             ; and a half-size red one inside it (Steve)
-        lsr     mry
-        lsr     mbx
-        lsr     mby
-        lda     #TXRED
-        lbsr    setcol
-        lbsr    arrow
+@arrow  lda     px              ; you: an arrow pointing the way you face
+        ldb     py
+        lbsr    centre
+        ldb     pdir
+        lbsr    youmark
+        lbsr    legend          ; what the marks mean, left of the maze
         lda     #TXGREEN        ; title
         sta     textmask
         lbsr    mbstart
@@ -318,15 +305,96 @@ mapdraw lbsr    clrfull
         clra
         ldy     #mbuf
         lbsr    rowstr
-        lda     #TXBLUE         ; legend
+        lda     #TXBLUE
         sta     textmask
-        ldy     #m_maplegend
-        lda     vmode
-        cmpa    #2
-        beq     @l
         ldy     #m_mapclose
-@l      lda     #22
+        lda     #22
         lbra    rowstr
+
+* legend: left of the maze (Steve), each mark as drawn on this level's map with its word, from row 2
+* every other row: you (pointing up; Steve: first), the down ladder (levels 1-4), the up ladder (2-5)
+LEGX    equ     16              ; the marks' centre x; the words start at column 2
+legend  lda     #TXBLUE
+        sta     textmask
+        lda     #$FF
+        lbsr    setpat
+        lda     #2
+        sta     lgrow
+        bsr     @at             ; you first (Steve)
+        clrb
+        bsr     youmark
+        ldy     #m_lyou
+        bsr     @word
+        lda     mz_lvl
+        cmpa    #5
+        bhs     @up
+        clr     mlup
+        ldy     #m_ldown
+        bsr     @lad
+@up     lda     mz_lvl
+        cmpa    #1
+        beq     @r
+        lda     #1
+        sta     mlup
+        ldy     #m_lup
+        bsr     @lad
+@r      rts
+@word   lda     lgrow           ; Y = the word, on this row; then the next row but one
+        ldb     #2
+        lbsr    printat
+        inc     lgrow
+        inc     lgrow
+        rts
+@lad    bsr     @at             ; a ladder mark (mlup: which), then its word Y
+        lda     #LADCOL
+        lbsr    setcol
+        lbsr    vmarkc
+        bra     @word
+@at     ldd     #LEGX           ; the mark's centre: on row lgrow
+        std     mxc
+        lda     lgrow
+        lsla
+        lsla
+        lsla
+        adda    #3
+        sta     myc
+        rts
+
+* youmark: you, at mxc, myc pointing way B: a light blue arrow outline drawn twice, the second a
+* pixel larger each way for a thicker line (Steve: it was almost invisible), and a half-size red
+* one inside it (Steve)
+youmark stb     mdir
+        ldd     mrx
+        pshs    d
+        ldd     mbx
+        pshs    d
+        lda     #TXBLUE
+        lbsr    setcol
+        ldb     mdir
+        lbsr    arrowc
+        inc     mrx
+        inc     mry
+        inc     mbx
+        inc     mby
+        ldb     mdir
+        lbsr    arrowc
+        ldd     2,s
+        std     mrx
+        ldd     ,s
+        std     mbx
+        lsr     mrx
+        lsr     mry
+        lsr     mbx
+        lsr     mby
+        lda     #TXRED
+        lbsr    setcol
+        ldb     mdir
+        lbsr    arrowc
+        puls    d
+        std     mbx
+        puls    d
+        std     mrx
+        rts
 
 * diamonds: a diamond on each item's cell (REVEAL), in ITEMCOL
 diamonds
@@ -550,6 +618,7 @@ centre  pshs    b
 vmark   pshs    d
         lbsr    centre
         puls    d
+vmarkc                          ; (at mxc, myc: the legend)
         lda     mcw             ; half its width: 3/8 of the cell
         ldb     #3
         mul
@@ -604,11 +673,7 @@ vmark   pshs    d
 
 * arrow: you, as the reference's triangle (outline): the point a little ahead of the centre, the back
 * corners behind it and to the sides
-arrow   lda     px
-        ldb     py
-        lbsr    centre
-        ldb     pdir
-        ldx     #dx1
+arrowc  ldx     #dx1            ; B = the way it points; centre at mxc, myc
         lda     b,x
         sta     mdx
         ldx     #dy1
@@ -833,6 +898,8 @@ mypix   fcb     0
 mxc     fdb     0
 myc     fcb     0
 mlup    fcb     0
+mdir    fcb     0               ; youmark: the way the arrow points
+lgrow   fcb     0               ; legend: the text row
 mend    fcb     0
 mtip    fcb     0
 mtipx   fdb     0
