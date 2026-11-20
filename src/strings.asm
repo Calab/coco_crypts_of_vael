@@ -316,3 +316,9 @@ m_burnedout fcn " BURNED OUT WHILE YOU SLEPT."
 m_tooweak fcn   "YOU ARE STILL TOO WEAK TO STAND..."
 m_neverwake fcn "YOU NEVER WAKE."
 w_strikes fcn   "STRIKES"
+
+* SOUND (the reference's)
+m_sndoff fcn    "SOUND OFF."
+m_sndvol fcn    "SOUND VOLUME "
+m_sndon fcn     "SOUND ON, VOLUME "
+m_sndrange fcn  " (0-9)."

@@ -207,7 +207,7 @@ mazedone bra    mazedone
         ldy     #s_nodata
         lbsr    printat
 nodata  bra     nodata          ; (screenshot point: the data file is missing)
-@dataok
+@dataok lbsr    sndcopy         ; the sound engine, from the data file up to $FC00
 
 * Ask which monitor, in black and white (the same on RGB and composite)
         ldx     #askpal
@@ -304,10 +304,24 @@ akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
         fcb     0
         endc
 
+* sndcopy: copy the sound engine's image (the start of bank BANKSND, from the data file) up to $FC00
+sndcopy lda     #BANKSND
+        sta     MMUT0+6
+        ldx     #BANKWIN
+        ldu     #$FC00
+@copy   ldd     ,x++
+        std     ,u++
+        cmpu    #sndres_end
+        blo     @copy
+        lda     #BANKCOM
+        sta     MMUT0+6
+        rts
+
 * tunego: play the tune asked for (tunereq 1 lose, 2 win; the player is in the data bank, tune.asm)
 tunego  lda     tunereq
         beq     @r
         clr     tunereq
+        lbsr    sndoff          ; (the tune drives the DAC itself)
         ldb     #BANKDAT
         stb     MMUT0+6
         jsr     tuneplay
@@ -408,6 +422,8 @@ enterlevel
         tst     lvlon           ; keep what you've seen, and the items, on the level you're leaving
         beq     @first
         pshs    a
+        lda     #SFX_DESCEND    ; (changing level)
+        lbsr    sfxa
         lbsr    seensave
         lbsr    itemsave
         lbsr    monsave
@@ -553,6 +569,8 @@ turn    sta     tdir1
 * are drawn from the old spot with the scenery pulled closer; backward ones from the new spot with
 * the scenery starting closer and receding (as the reference's renderView does).
 step    sta     stmode
+        lda     #SFX_STEP
+        lbsr    sfxa
         ldx     #dx1
         lda     b,x
         adda    px
@@ -758,7 +776,10 @@ irqinit lda     #$7E            ; JMP irqh at the CoCo 3's IRQ vector
         lda     IRQENR
         lbsr    kbscan          ; note what's held now (the R or C, say), then forget it
         lbsr    kbflush
-        andcc   #$EF
+        lbsr    sndinit         ; the sound engine: its state, FIRQ vector, timer clock, sound on
+        lda     #$7C            ; GIME IRQ and FIRQ on
+        sta     INIT0
+        andcc   #$AF            ; IRQ and FIRQ
         rts
 
 irqh    lda     IRQENR          ; acknowledge
@@ -862,11 +883,28 @@ highend
         error   "high code is past $FBFF (its load copy must end below $7C00)"
         endc
 
+* ---- The sound engine ($FC00-$FEED): carried by the data file, copied up by sndcopy ----
+        include "sound.asm"
+        ifgt    sndres_end-$FEEC
+        error   "the sound engine is too big (sndcopy copies 2 bytes at a time, up to $FEED)"
+        endc
+
+* ---- The level generator, an overlay: carried by the data file (bank BANKSND from $0C00), mapped
+* at $8000 only while mklevel runs (so it's assembled at $8C00) ----
+OVLWIN  equ     $8C00
+        org     OVLWIN
+        include "mazegen.asm"
+ovlend
+        ifgt    ovlend-$A000
+        error   "the level generator overlay is past $9FFF"
+        endc
+
 * ---- Common bank (block BANKCOM at $C000-$DFFF): font and tables ----
         org     BANKWIN
         include "font.asm"
         include "tables.asm"
         include "strings.asm"
+        include "crylv.asm"
 bankcomend
         ifgt    bankcomend-(BANKWIN+$2000)
         error   "common bank is over 8K"

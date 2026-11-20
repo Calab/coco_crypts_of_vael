@@ -439,7 +439,7 @@ V_EXAMINE equ   10
 
 vjump   fdb     c_move,c_reveal,c_turn,c_attack,c_get,c_drop,c_stow,c_pull
         fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_sleep
-        fdb     c_notyet,c_notyet,c_seed,c_monitor,c_xxx,c_xlight,c_xjump,c_xdepth
+        fdb     c_notyet,c_sound,c_seed,c_monitor,c_xxx,c_xlight,c_xjump,c_xdepth
         fdb     c_xinfo
 
 c_notyet
@@ -495,6 +495,8 @@ c_move  lda     #1              ; forward, or BACK / LEFT / RIGHT
         lbsr    step
         tsta
         beq     @moved
+        lda     #SFX_THUD
+        lbsr    sfxa
         ldd     #3              ; walking into stone hurts: 2-4 (the reference's rnd(2, 4))
         lbsr    rndn
         addd    #2
@@ -1181,6 +1183,8 @@ c_sleep lda     #1              ; how long: 1-20
         lbsr    mbsend
         bra     @after
 @woken  lbsr    @wake           ; "YOU ARE JOLTED AWAKE AFTER 2 MOVES!" (rounded, at least 1)
+        lda     #SFX_HURT
+        lbsr    sfxa
         lbsr    mbstart
         ldx     #m_jolted
         lbsr    mbstr
@@ -1277,3 +1281,98 @@ c_sleep lda     #1              ; how long: 1-20
         ldx     #palsh
         lbra    setpal
 
+* ---- SLEEP's helpers ----
+* monbeside: EQ (X = the monster) if an awake monster is in your cell or one step away
+monbeside
+        ldx     #mons
+        lda     nmons
+        beq     @no
+        sta     slmc
+@each   lda     MFLAGS,x
+        bita    #MF_DORMANT
+        bne     @next
+        lda     MX,x
+        ldb     MY,x
+        lbsr    pdat
+        cmpd    #1
+        bhi     @next           ; (-1, unreachable, is high too)
+        clra                    ; EQ
+        rts
+@next   leax    MONREC,x
+        dec     slmc
+        bne     @each
+@no     lda     #1
+        rts
+
+* slstrike: EQ and Y = the newest held-back message with "STRIKES" in it, if any
+slstrike
+        lda     nslog
+        beq     @no
+        sta     slmc
+        ldb     slhead          ; newest: the slot before slhead
+@slot   decb
+        bpl     @s
+        ldb     #2
+@s      stb     slcnt
+        lda     #64
+        mul
+        addd    #sleeplog
+        tfr     d,y
+        tfr     d,x
+@scan   lda     ,x              ; look for "STRIKES"
+        beq     @nf
+        ldu     #w_strikes
+        pshs    x
+@cmp    lda     ,u+
+        beq     @found
+        cmpa    ,x+
+        beq     @cmp
+        puls    x
+        leax    1,x
+        bra     @scan
+@found  puls    x
+        clra                    ; EQ
+        rts
+@nf     ldb     slcnt
+        dec     slmc
+        bne     @slot
+@no     lda     #1
+        rts
+
+sln     fcb     0               ; SLEEP's variables
+slcnt   fcb     0
+sltmp   fcb     0
+slmc    fcb     0
+slhp    fdb     0
+sllight fcb     0
+sltotal fdb     0
+simmed  fdb     0
+
+* freshen: the play clock is 16 bits (wraps after 18 minutes) and times are compared by signed
+* differences, so none may fall more than 9 minutes behind it. Any time over 10000 ticks (2.8 min) in
+* the past is moved up to 10000 ticks ago: still long past for everything that checks it.
+freshen ldx     #fresht
+@w      ldy     ,x++
+        beq     @mons
+        bsr     @one
+        bra     @w
+@mons   lda     nmons
+        beq     @ret
+        sta     etmp
+        ldy     #mons+MNEXTMV
+@m      bsr     @one
+        leay    MNEXTAT-MNEXTMV,y
+        bsr     @one
+        leay    MONREC-(MNEXTAT-MNEXTMV),y
+        dec     etmp
+        bne     @m
+@ret    rts
+@one    ldd     stime
+        subd    ,y
+        cmpd    #10000
+        blt     @ok
+        ldd     stime
+        subd    #10000
+        std     ,y
+@ok     rts
+fresht  fdb     lasthurt,lastmove,laststruck,nextwarn,nextsound,atkready,atkready+2,hbnext,nextcry,0

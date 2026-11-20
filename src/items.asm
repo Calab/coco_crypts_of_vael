@@ -430,7 +430,9 @@ c_get   lbsr    needhand
         stb     a,x
         ldd     #3
         lbsr    gainxp
-@said   lbsr    mbstart         ; "YOU TAKE THE DAGGER IN YOUR LEFT HAND."
+@said   lda     #SFX_GET
+        lbsr    sfxa
+        lbsr    mbstart         ; "YOU TAKE THE DAGGER IN YOUR LEFT HAND."
         ldx     #m_youtake
         lbsr    mbstr
         ldb     gkind
@@ -559,6 +561,8 @@ c_pull  lbsr    needhand
         lda     ch
         ldx     #hands
         stb     a,x
+        lda     #SFX_GET
+        lbsr    sfxa
         ldx     #m_youpull
         ldy     #m_dot
         lbsr    saything
@@ -704,11 +708,15 @@ apply   stb     gkind
         ldy     #m_stronger
 @said   lda     #1
         sta     statdirty
+        lda     #SFX_GET
+        lbsr    sfxa
         lbra    msg
 @treas  bsr     consume         ; golden relic: 15 XP
         ldd     #15
         lbsr    gainxp
         ldy     #m_ancient
+        lda     #SFX_GET
+        lbsr    sfxa
         lbra    msg
 @map    lda     #1              ; YOUR MAP (it stays in your hand or pack)
         sta     vmode
@@ -1081,6 +1089,8 @@ heartbeat
 @due    ldd     stime           ; a new beat?
         subd    hbnext
         bmi     @ret
+        lda     #SFX_BEAT
+        lbsr    sfxa
         lda     #1
         sta     hbbig
         ldd     ticks
@@ -1097,7 +1107,7 @@ hbshow  lda     back
         pshs    a
         clra
         lbsr    mappage
-        bsr     drawheart
+        lbsr    drawheart
         lda     #1
         lbsr    mappage
         lbsr    drawheart

@@ -17,6 +17,8 @@
 #                   the keyboard, save the final screen -> $(SHOTDIR)/keys.png
 #   make tunes      the win and lose tunes as WAVs, played through the player's arithmetic
 #                   -> $(SHOTDIR)/tune-lose.wav, tune-win.wav
+#   make sfx        every sound effect in turn, played through the engine's arithmetic
+#                   -> $(SHOTDIR)/sfx-all.wav (prints the order)
 #   make tunetime   check the tune player keeps its samples evenly spaced (TUNE=1 or 2)
 #   make profile    where a frame's time goes (see below)
 #   make clean
@@ -40,9 +42,19 @@ SHOT_SECS ?= 100         # give up after this many seconds of emulated time
 WALK      ?= 40
 SEEDS     ?= 0 1 12345 4294967295 VAEL
 
-GENERATED = $(BUILD)/font.asm $(BUILD)/tables.asm $(BUILD)/data.sym
+GENERATED = $(BUILD)/font.asm $(BUILD)/tables.asm $(BUILD)/data.sym $(BUILD)/sfxid.inc $(BUILD)/crylv.asm
 SOURCES = $(wildcard $(SRC)/*.asm $(SRC)/*.inc) $(GENERATED)
 ASM = $(LWASM) --format=decb -I $(SRC) -I $(BUILD) --symbols
+
+# A build variant's own disk: $(call variant,NAME) after assembling build/NAME.raw gives build/NAME.bin
+# and build/NAME.dsk (its data file carries its own copy of the code at $FC00, which calls the game)
+define variant
+	$(PYTHON) tools/relocate.py $(BUILD)/$(1).raw $(BUILD)/$(1).bin $(BUILD)/$(1).res $(BUILD)/$(1).ovl
+	$(PYTHON) tools/joindata.py $(BUILD)/$(1).dat $(BUILD)/data.dat $(BUILD)/$(1).res $(BUILD)/sndbank.dat \
+	    $(BUILD)/$(1).ovl
+	$(PYTHON) tools/mkdsk.py $(BUILD)/$(1).dsk VAEL.BIN=$(BUILD)/$(1).bin VAELDATA.DAT=$(BUILD)/$(1).dat:1 >/dev/null
+endef
+VFLAGS = -machine coco3 -ram 128 -ui null -ao null -no-ratelimit
 
 all: $(DISK)
 
@@ -59,17 +71,30 @@ $(BUILD)/tables.asm: tools/mktables.py | $(BUILD)
 $(BUILD)/tunes.asm: tools/mktunes.py | $(BUILD)
 	$(PYTHON) $< $@
 
-# The data file (a raw image of bank $3D) and the addresses the game needs from it
-$(BUILD)/vaeldata.dat $(BUILD)/data.sym: $(SRC)/data.asm $(SRC)/icons.asm $(SRC)/monsters.asm \
+# The sound effects (tools/mksfx.py): their segments, their numbers, cry loudness by distance
+$(BUILD)/sfx.asm $(BUILD)/sfxid.inc $(BUILD)/crylv.asm: tools/mksfx.py | $(BUILD)
+	$(PYTHON) tools/mksfx.py $(BUILD)
+
+# Bank $3D's part of the data file (shapes, tune player) and the addresses the game needs from it
+$(BUILD)/data.dat $(BUILD)/data.sym: $(SRC)/data.asm $(SRC)/icons.asm $(SRC)/monsters.asm \
     $(SRC)/tune.asm $(BUILD)/tunes.asm | $(BUILD)
-	$(LWASM) --6809 --format=raw -I $(SRC) -I $(BUILD) --list=$(BUILD)/data.lst --symbol-dump=$(BUILD)/data.sym -o $(BUILD)/vaeldata.dat $(SRC)/data.asm
+	$(LWASM) --6809 --format=raw -I $(SRC) -I $(BUILD) --list=$(BUILD)/data.lst --symbol-dump=$(BUILD)/data.sym -o $(BUILD)/data.dat $(SRC)/data.asm
+
+# Bank $3E's sound effects
+$(BUILD)/sndbank.dat: $(SRC)/sndbank.asm $(BUILD)/sfx.asm | $(BUILD)
+	$(LWASM) --format=raw -I $(SRC) -I $(BUILD) -o $@ $(SRC)/sndbank.asm
+
+# The data file: bank $3D, then bank $3E (the sound engine's image from vael.bin's build, the sounds,
+# the level generator overlay)
+$(BUILD)/vaeldata.dat: $(BUILD)/data.dat $(BUILD)/vael.bin $(BUILD)/sndbank.dat tools/joindata.py
+	$(PYTHON) tools/joindata.py $@ $(BUILD)/data.dat $(BUILD)/vael.res $(BUILD)/sndbank.dat $(BUILD)/vael.ovl
 
 # Assemble, then move the banked parts to load addresses LOADM can use (tools/relocate.py)
 # DEFS: extra lwasm options for trying things, e.g. make -B run DEFS=-DLADCOL=175 (-B forces a rebuild;
 # write numbers in decimal, since the shell eats a leading $)
 $(BUILD)/vael.bin: $(SOURCES) tools/relocate.py | $(BUILD)
 	$(ASM) $(DEFS) --list=$(BUILD)/vael.lst --symbol-dump=$(BUILD)/vael.sym -o $(BUILD)/vael.raw $(SRC)/main.asm
-	$(PYTHON) tools/relocate.py $(BUILD)/vael.raw $@
+	$(PYTHON) tools/relocate.py $(BUILD)/vael.raw $@ $(BUILD)/vael.res $(BUILD)/vael.ovl
 
 $(DISK): $(BUILD)/vael.bin $(BUILD)/vaeldata.dat tools/mkdsk.py
 	$(PYTHON) tools/mktunes.py --check $(BUILD)/data.lst
@@ -84,11 +109,11 @@ run-cmp: $(DISK)
 shot: $(SOURCES) $(DISK) | $(BUILD)
 	$(ASM) -D AUTOMON=$$(printf '%d' "'$(strip $(SHOT_MON))") $(SHOT_DEFS) --list=$(BUILD)/shot.lst \
 	    --symbol-dump=$(BUILD)/shot.sym -o $(BUILD)/shot.raw $(SRC)/main.asm
-	$(PYTHON) tools/relocate.py $(BUILD)/shot.raw $(BUILD)/shot.bin
+	$(call variant,shot)
 	@addr=$$(awk '$$1=="$(strip $(SHOT_AT))" {sub(/\$$/,"",$$3); print $$3}' $(BUILD)/shot.sym); \
 	test -n "$$addr" || { echo "symbol $(SHOT_AT) not found"; exit 1; }; \
 	rm -f $(BUILD)/shot.sna; \
-	timeout 300 $(XROAR) $(XROAR_FLAGS) -ui null -ao null -no-ratelimit -run $(BUILD)/shot.bin \
+	timeout 300 $(XROAR) $(VFLAGS) -load-fd0 $(BUILD)/shot.dsk -run $(BUILD)/shot.bin \
 	    -trap pc=0x$$addr -trap-range $(strip $(SHOT_N)) -trap-snap $(BUILD)/shot.sna \
 	    -trap-timeout 0 -timeout $(strip $(SHOT_SECS)) >/dev/null 2>&1; \
 	test -f $(BUILD)/shot.sna || { echo "program never reached $(SHOT_AT) (0x$$addr)"; exit 1; }
@@ -125,14 +150,18 @@ tunes: | $(BUILD)
 	@mkdir -p $(SHOTDIR)
 	$(PYTHON) tools/mktunes.py $(BUILD)/tunes.asm --wav $(SHOTDIR)
 
+sfx: | $(BUILD)
+	@mkdir -p $(SHOTDIR)
+	$(PYTHON) tools/mksfx.py $(BUILD) --wav $(SHOTDIR)
+
 # Check the tune player's samples are evenly spaced: play tune TUNE (1 lose, 2 win) in XRoar with a
 # trace and time every pass of its loop (tools/tunetime.py). Run it after changing src/tune.asm.
 TUNE ?= 2
 tunetime: $(SOURCES) $(DISK) | $(BUILD)
 	$(ASM) -D AUTOMON=82 -D TUNETEST=$(TUNE) --symbol-dump=$(BUILD)/tt.sym -o $(BUILD)/tt.raw $(SRC)/main.asm
-	$(PYTHON) tools/relocate.py $(BUILD)/tt.raw $(BUILD)/tt.bin
+	$(call variant,tt)
 	@addr=$$(awk '$$1=="smp" {sub(/\$$/,"",$$3); print $$3}' $(BUILD)/tt.sym); \
-	timeout 300 $(XROAR) $(XROAR_FLAGS) -ui null -ao null -no-ratelimit -run $(BUILD)/tt.bin \
+	timeout 300 $(XROAR) $(VFLAGS) -load-fd0 $(BUILD)/tt.dsk -run $(BUILD)/tt.bin \
 	    -trap pc=0x$$addr -trap-range 1 -trap-trace-n 300000 -trace-timing -timeout 100 \
 	    > $(BUILD)/trace.txt 2>&1 || true
 	$(PYTHON) tools/tunetime.py $(BUILD)/trace.txt $(BUILD)/tt.sym
@@ -142,9 +171,9 @@ tunetime: $(SOURCES) $(DISK) | $(BUILD)
 PROF_N ?= 2
 profile: $(SOURCES) $(DISK) | $(BUILD)
 	$(ASM) $(SHOT_DEFS) -D AUTOMON=82 --symbol-dump=$(BUILD)/prof.sym -o $(BUILD)/prof.raw $(SRC)/main.asm
-	$(PYTHON) tools/relocate.py $(BUILD)/prof.raw $(BUILD)/prof.bin
+	$(call variant,prof)
 	@addr=$$(awk '$$1=="render" {sub(/\$$/,"",$$3); print $$3}' $(BUILD)/prof.sym); \
-	timeout 300 $(XROAR) $(XROAR_FLAGS) -ui null -ao null -no-ratelimit -run $(BUILD)/prof.bin \
+	timeout 300 $(XROAR) $(VFLAGS) -load-fd0 $(BUILD)/prof.dsk -run $(BUILD)/prof.bin \
 	    -trap pc=0x$$addr -trap-range $(PROF_N) -trap-trace-n 2000000 -trace-timing -timeout 100 \
 	    > $(BUILD)/trace.txt 2>&1 || true
 	$(PYTHON) tools/profile.py $(BUILD)/trace.txt $(BUILD)/prof.sym
@@ -153,4 +182,4 @@ profile: $(SOURCES) $(DISK) | $(BUILD)
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all run run-cmp shot fontshot askshot walk mazecheck keys shapes tunes tunetime profile clean
+.PHONY: all run run-cmp shot fontshot askshot walk mazecheck keys shapes tunes sfx tunetime profile clean
