@@ -150,6 +150,8 @@ second  tst     vlight
 * gainxp: D = XP. Rank = min(10, xp / 25); a new rank gets "YOU GROW MORE SKILLED!  (RANK n)".
 gainxp  addd    xp
         std     xp
+        lda     #1
+        sta     statdirty
         bsr     rank
         cmpa    lastrank
         bls     @ret
@@ -919,7 +921,8 @@ packview
 * paintstat: row 21: "L: item" from the left, "R: item" ending at the right (held items light blue,
 * empty hands green, as the reference's yellow / green), and in the middle the heart (columns 15-16,
 * red) and HP (from column 17). An item name over 12 letters shows its kind word instead
-* (none do now; MENDING BREW was renamed to fit). Row 22: WINDED / EXHAUSTED, centred. Blank on the title.
+* (none do now; MENDING BREW was renamed to fit). Row 22: RANK and XP under the health, WINDED /
+* EXHAUSTED at the right. Blank on the title.
 HEARTCOL equ    15
 paintstat
         ldx     #sbuf
@@ -936,7 +939,7 @@ paintstat
         bne     @play
         rts
 @play   clra                    ; left hand
-        bsr     @hand
+        lbsr    @hand
         lda     #1              ; right hand
         bsr     @hand
         lbsr    mbstart         ; HP
@@ -954,15 +957,37 @@ paintstat
         ldy     #mbuf
         lbsr    printat
         lbsr    drawheart
-        lbsr    fatlevel        ; row 22: WINDED / EXHAUSTED
+        lbsr    mbstart         ; row 22, under the health: RANK n  XP n (the reference's, in its
+        ldx     #m_rank         ;   item colour: our light blue)
+        lbsr    mbstr
+        lbsr    rank
+        tfr     a,b
+        clra
+        lbsr    mbnum
+        ldx     #m_xp2
+        lbsr    mbstr
+        ldd     xp
+        lbsr    mbnum
+        ldu     mbp
+        clr     ,u
+        lda     #TXBLUE
+        sta     textmask
+        ldd     #(STATROW<<8)|HEARTCOL
+        ldy     #mbuf
+        lbsr    printat
+        lbsr    fatlevel        ; and WINDED / EXHAUSTED at the right
         tsta
         beq     @ret
         ldy     #m_winded
+        ldb     #40-6
         deca
         beq     @fw
         ldy     #m_exhausted
-@fw     lda     #STATROW
-        lbra    center
+        ldb     #40-9
+@fw     lda     #TXGREEN
+        sta     textmask
+        lda     #STATROW
+        lbra    printat
 @ret    rts
 @hand   sta     ch              ; A = hand: "L: name" / "R: name"
         lbsr    mbstart
@@ -983,8 +1008,9 @@ paintstat
         lbsr    kname
         tfr     x,u             ; too long? the kind word
         lbsr    slen
+        tfr     b,a             ; (A = the length; B = the item again)
         puls    b
-        cmpb    #12
+        cmpa    #12
         bls     @full
         andb    #$7F
         lslb

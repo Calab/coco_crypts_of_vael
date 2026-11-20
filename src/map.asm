@@ -274,7 +274,14 @@ mapdraw lbsr    clrview         ; rows 0-135, then 136-183
         bne     @arrow
         lbsr    diamonds
         lbsr    monletters
-@arrow  lda     #TXBLUE         ; you: an arrow pointing the way you face
+@arrow  lda     #TXBLUE         ; you: an arrow pointing the way you face, light blue
+        lbsr    setcol
+        lbsr    arrow
+        lsr     mrx             ; and a half-size red one inside it (Steve)
+        lsr     mry
+        lsr     mbx
+        lsr     mby
+        lda     #TXRED
         lbsr    setcol
         lbsr    arrow
         lda     #TXGREEN        ; title
@@ -536,46 +543,62 @@ centre  pshs    b
         stb     myc
         rts
 
-* vmark: a ladder mark at A = x, B = y: a V (down), or a ^ if mlup is set
-vmark   bsr     centre
-        lda     myc             ; y of the open ends and the point
+* vmark: a ladder mark at A = x, B = y: a solid triangle (Steve), pointing down for the down ladder,
+* or up if mlup is set; filled with a horizontal line per row, most of the cell's size
+vmark   pshs    d
+        lbsr    centre
+        puls    d
+        lda     mcw             ; half its width: 3/8 of the cell
+        ldb     #3
+        mul
+        lsrb
+        lsrb
+        lsrb
+        stb     mhw
+        lda     mch             ; its height: the cell's, less a row top and bottom
+        suba    #2
+        sta     mth
+        lda     myc             ; its top row
+        ldb     mch
+        lsrb
+        pshs    b
+        suba    ,s+
+        inca
+        sta     mty
+        clr     mtr             ; row by row: width falls from the base to the point
+@row    lda     mth             ; this row's half-width: mhw x (rows to the point) / height
+        suba    mtr             ;   down: rows left;  up: rows done + 1
         tst     mlup
-        bne     @upy
-        suba    mvt             ; V: ends above, point below
-        sta     mend
-        lda     myc
-        adda    mvb
-        sta     mtip
-        bra     @draw
-@upy    adda    mvt             ; ^: ends below, point above
-        sta     mend
-        lda     myc
-        suba    mvb
-        sta     mtip
-@draw   clra                    ; left end to the point
-        ldb     mvx
+        beq     @hw
+        lda     mtr
+        inca
+@hw     ldb     mhw
+        mul
+        clr     mtq
+@div    cmpb    mth             ; (small: divide by subtraction)
+        blo     @dq
+        subb    mth
+        inc     mtq
+        bra     @div
+@dq     clra
+        ldb     mtq
         pshs    d
         ldd     mxc
-        subd    ,s++
+        subd    ,s
         std     <lx0
-        lda     mend
-        sta     <ly0
         ldd     mxc
+        addd    ,s++
         std     <lx1
-        lda     mtip
+        lda     mty
+        adda    mtr
+        sta     <ly0
         sta     <ly1
         lbsr    line
-        ldd     mxc             ; the point to the right end
-        std     <lx0
-        lda     mtip
-        sta     <ly0
-        clra
-        ldb     mvx
-        addd    mxc
-        std     <lx1
-        lda     mend
-        sta     <ly1
-        lbra    line
+        inc     mtr
+        lda     mtr
+        cmpa    mth
+        blo     @row
+        rts
 
 * arrow: you, as the reference's triangle (outline): the point a little ahead of the centre, the back
 * corners behind it and to the sides
@@ -822,6 +845,11 @@ mc1y    fcb     0
 mc2x    fdb     0
 mc2y    fcb     0
 mlcnt   fcb     0               ; monletters
+mhw     fcb     0               ; vmark: half-width, height, top row, row, quotient
+mth     fcb     0
+mty     fcb     0
+mtr     fcb     0
+mtq     fcb     0
 mlp     fdb     0
 mlq     fdb     0
 mlx     fdb     0

@@ -272,14 +272,22 @@ mainloop
         lbsr    getkey
         beq     @view           ; no key: but a monster may have moved
         lbsr    editkey
+        bsr     @still          ; (the command's own drawing and working out took no game time)
 @view   tst     vdirty          ; redraw whenever something changed, key or not
-        beq     mainloop
+        lbeq    mainloop
         clr     vdirty
         tst     gmode
-        beq     mainloop
+        lbeq    mainloop
         lbsr    paintdirty      ; messages first, then the view
         lbsr    drawframe
-        bra     mainloop
+        bsr     @still
+        lbra    mainloop
+* The play clock stands still while the CoCo draws and works: the web version draws instantly, so
+* its monsters only get the time you spend looking and typing (Steve: they ganged up when every
+* step's 0.5 s of drawing gave them extra moves). Drop the ticks that passed since gameclock.
+@still  ldd     ticks
+        std     lastt
+        rts
         endc
         ifdef   AUTOKEYS
 walkdone bra    walkdone        ; the scripted keys ran out
