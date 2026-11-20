@@ -1152,6 +1152,26 @@ deepck  lda     mz_lvl
         sta     <deepest
 @r      rts
 
+* testmsg: (newgame) seed 0: the reference's "TEST MAZE..." message; its text is in bank BANKSND at
+* TESTMSG (bank3e.asm: the common bank had no room), copied into mbuf
+TESTMSG equ     $DC00           ; (src/bank3e.asm has the same constant)
+testmsg ldd     seed
+        bne     @r
+        ldd     seed+2
+        bne     @r
+        lda     #BANKSND
+        sta     MMUT0+6
+        ldx     #TESTMSG
+        ldu     #mbuf
+@c      lda     ,x+
+        sta     ,u+
+        bne     @c
+        lda     #BANKCOM
+        sta     MMUT0+6
+        ldy     #mbuf
+        lbra    msg
+@r      rts
+
 * endreset: (newplayer) a new game's end screen numbers
 endreset
         clr     <psec

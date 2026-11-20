@@ -435,6 +435,7 @@ newgame lda     #1
         std     num32+2
         lbsr    mbnum32
         lbsr    mbsend
+        lbsr    testmsg         ; seed 0: the test maze's message
         lda     #1
         sta     cmddirty
         rts
