@@ -6,7 +6,7 @@
 * load there, so tools/relocate.py takes it out of the .bin and the data file carries it (at the start
 * of bank BANKSND); start copies it up (sndcopy). Every build variant gets its own data file with its
 * own copy (Makefile's variant), so code here can call the game's routines. The game-side sound code
-* (the SOUND command, monster cries) lives here too: the fixed and high code areas are full.
+* (monster cries) lives here too.
 *
 * Two voices: 0 the heartbeat, 1 everything else (actions and monster cries; a cry never interrupts
 * an action). Each steps a 16-bit phase and makes its wave from it on the spot (no tables): sawtooth,
@@ -154,6 +154,7 @@ stick   lda     #STICK
         sta     <scnt
         pshs    y,u
         lda     MMUT0+6         ; (the segments are in BANKSND: map it in for this tick)
+        anda    #$3F            ; (some GIMEs read the top 2 bits back as junk)
         pshs    a
         ldy     #V0
         ldx     #v0tab
@@ -172,12 +173,10 @@ stick   lda     #STICK
         lda     <V0+VDUR        ; anything still playing?
         ora     <V1+VDUR
         bne     @r
-        clr     TIMERHI         ; no: the timer stops (a count of 0)
+        clr     TIMERHI         ; no: the timer stops (a count of 0) and the sound is switched off
         clr     TIMERLO
         clr     <srun
-        lda     #$82
-        sta     <sout
-        sta     DAC
+        lbsr    sndquiet
 @r      puls    y,u
         puls    d,x
         rti
@@ -235,6 +234,7 @@ sndplay pshs    cc,d,x,y,u
         sta     <stmp
         orcc    #$50            ; (the interrupt mustn't see a voice half set up)
         ldb     MMUT0+6
+        andb    #$3F
         pshs    b
         ldb     #BANKSND
         stb     MMUT0+6
@@ -262,6 +262,9 @@ sndplay pshs    cc,d,x,y,u
         tst     <srun           ; the timer running?
         bne     @x
         inc     <srun
+        lda     $FF23           ; sound on (from the DAC)
+        ora     #$08
+        sta     $FF23
         lda     #1
         sta     <scnt
         ldd     #STIMER
@@ -279,10 +282,20 @@ sndoff  pshs    cc,a
         clr     <srun
         clr     <V0+VDUR
         clr     <V1+VDUR
+        bsr     sndquiet
+        puls    cc,a,pc
+
+* sndquiet: sound switched off, the DAC at its middle for when it's next switched on. While nothing
+* plays the sound stays off, as BASIC leaves it: a steady level on the speaker is silent in theory, but
+* XRoar turned it into static (Steve, 2026-11-19).
+sndquiet
         lda     #$82
         sta     <sout
         sta     DAC
-        puls    cc,a,pc
+        lda     $FF23
+        anda    #$F7
+        sta     $FF23
+        rts
 
 * sndinit: (at start-up, interrupts off) state, the FIRQ vector, the timer's clock, sound on
 sndinit ldx     #SNDDP
@@ -299,7 +312,7 @@ sndinit ldx     #SNDDP
         sta     <sout
         lda     #1
         sta     <slfsr
-        lda     #6*28           ; SOUND 6, as the reference starts
+        lda     #6*36           ; SOUND 6, as the reference starts
         sta     <smaster
         lda     #$7E            ; JMP firqh at the CoCo 3's FIRQ vector
         sta     $FEF4
@@ -309,18 +322,13 @@ sndinit ldx     #SNDDP
         sta     INIT1
         lda     #$20            ; the timer's FIRQ
         sta     FIRQENR
-        lda     $FF01           ; sound on, from the DAC (select lines 0, 0); it stays on
-        anda    #$F7
+        lda     $FF01           ; the sound source: the DAC (select lines 0, 0); switched on only while
+        anda    #$F7            ; something plays
         sta     $FF01
         lda     $FF03
         anda    #$F7
         sta     $FF03
-        lda     #$82
-        sta     DAC
-        lda     $FF23
-        ora     #$08
-        sta     $FF23
-        rts
+        bra     sndquiet
 * ---- the game's side ----
 
 * sfxa: play sound A at full loudness. Keeps B, X, Y, U.
@@ -376,48 +384,6 @@ crytick ldd     stime
         bra     sfx
 @r      rts
 nextcry fdb     0
-
-* SOUND [0-9]: the volume of the sound effects (the reference's: 6 to start; SOUND alone turns them
-* off, or back on at the last volume)
-c_sound lda     #1
-        lbsr    tokget
-        cmpb    #1
-        bne     @tog
-        lda     ,x
-        suba    #'0
-        cmpa    #9
-        bhi     @tog
-        bsr     @set
-        beq     @off
-        sta     lastvol
-        ldx     #m_sndvol
-        bra     @say
-@tog    tst     <smaster
-        beq     @on
-        clra
-        bsr     @set
-@off    lbsr    sndoff
-        ldy     #m_sndoff
-        lbra    msg
-@on     lda     lastvol
-        bsr     @set
-        ldx     #m_sndon
-@say    lbsr    mbstart         ; "SOUND VOLUME 6 (0-9)."
-        lbsr    mbstr
-        clra
-        ldb     lastvol
-        lbsr    mbnum
-        ldx     #m_sndrange
-        lbsr    mbstr
-        lbra    mbsend
-@set    pshs    a               ; volume A (0-9): sets smaster; EQ if 0
-        ldb     #28
-        mul
-        stb     <smaster
-        puls    a
-        tsta
-        rts
-lastvol fcb     6
 
 sndres_end
         ifgt    sndres_end-$FEEE

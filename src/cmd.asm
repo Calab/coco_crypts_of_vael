@@ -1376,3 +1376,48 @@ freshen ldx     #fresht
         std     ,y
 @ok     rts
 fresht  fdb     lasthurt,lastmove,laststruck,nextwarn,nextsound,atkready,atkready+2,hbnext,nextcry,0
+
+* SOUND [0-9]: the volume of the sound effects (the reference's: 6 to start; SOUND alone turns them
+* off, or back on at the last volume)
+c_sound lda     #1
+        lbsr    tokget
+        cmpb    #1
+        bne     @tog
+        lda     ,x
+        suba    #'0
+        cmpa    #9
+        bhi     @tog
+        bsr     @set
+        beq     @off
+        sta     lastvol
+        ldx     #m_sndvol
+        bra     @say
+@tog    tst     <smaster
+        beq     @on
+        clra
+        bsr     @set
+@off    lbsr    sndoff
+        ldy     #m_sndoff
+        lbra    msg
+@on     lda     lastvol
+        bsr     @set
+        ldx     #m_sndon
+@say    lbsr    mbstart         ; "SOUND VOLUME 6 (0-9)."
+        lbsr    mbstr
+        clra
+        ldb     lastvol
+        lbsr    mbnum
+        ldx     #m_sndrange
+        lbsr    mbstr
+        lbra    mbsend
+@set    pshs    a               ; volume A (0-9): sets smaster (x 36, at most 255); EQ if 0
+        ldb     #36
+        mul
+        tsta
+        beq     @s
+        ldb     #255
+@s      stb     <smaster
+        puls    a
+        tsta
+        rts
+lastvol fcb     6

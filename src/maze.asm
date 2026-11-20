@@ -8,7 +8,8 @@
 * Grid cell (x, y) is grid + y*S + x. Directions: 0 north, 1 east, 2 south, 3 west.
 
 mklevel ldb     MMUT0+4         ; the generator (mazegen.asm, in BANKSND) at $8000, the work buffers
-        pshs    b               ; (scratch bank) at $C000
+        andb    #$3F            ; (scratch bank) at $C000
+        pshs    b
         ldb     #BANKSND
         stb     MMUT0+4
         ldb     #BANKSCR
