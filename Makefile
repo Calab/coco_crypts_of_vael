@@ -4,6 +4,7 @@
 #                   (on a CoCo: LOADM"VAEL":EXEC)
 #   make run        run it in XRoar on an RGB monitor (window), with the disk in drive 0
 #   make run-cmp    run it in XRoar on a composite monitor (window)
+#                   (AO="..." adds XRoar audio options to either, e.g. AO="-ao-buffer-ms 200")
 #   make shot       build a variant that answers the monitor question itself (SHOT_MON, default R)
 #                   plus any SHOT_DEFS, run it headless until it reaches SHOT_AT (the SHOT_N'th time),
 #                   and save $(SHOTDIR)/$(SHOT_NAME).png
@@ -14,6 +15,9 @@
 #   make shapes     regenerate src/icons.asm and src/monsters.asm from the reference (needs gjs)
 #   make keys       type KEYS (e.g. KEYS="12345/M/T L/"; / = ENTER, ~ = wait a second) instead of
 #                   the keyboard, save the final screen -> $(SHOTDIR)/keys.png
+#   make tunes      the win and lose tunes as WAVs, played through the player's arithmetic
+#                   -> $(SHOTDIR)/tune-lose.wav, tune-win.wav
+#   make tunetime   check the tune player keeps its samples evenly spaced (TUNE=1 or 2)
 #   make profile    where a frame's time goes (see below)
 #   make clean
 
@@ -51,9 +55,14 @@ $(BUILD)/font.asm: $(SRC)/font.txt tools/font2asm.py | $(BUILD)
 $(BUILD)/tables.asm: tools/mktables.py | $(BUILD)
 	$(PYTHON) $< $@
 
+# The win and lose tunes (events and wave tables for src/tune.asm)
+$(BUILD)/tunes.asm: tools/mktunes.py | $(BUILD)
+	$(PYTHON) $< $@
+
 # The data file (a raw image of bank $3D) and the addresses the game needs from it
-$(BUILD)/vaeldata.dat $(BUILD)/data.sym: $(SRC)/data.asm $(SRC)/icons.asm $(SRC)/monsters.asm | $(BUILD)
-	$(LWASM) --format=raw -I $(SRC) --symbol-dump=$(BUILD)/data.sym -o $(BUILD)/vaeldata.dat $(SRC)/data.asm
+$(BUILD)/vaeldata.dat $(BUILD)/data.sym: $(SRC)/data.asm $(SRC)/icons.asm $(SRC)/monsters.asm \
+    $(SRC)/tune.asm $(BUILD)/tunes.asm | $(BUILD)
+	$(LWASM) --6809 --format=raw -I $(SRC) -I $(BUILD) --list=$(BUILD)/data.lst --symbol-dump=$(BUILD)/data.sym -o $(BUILD)/vaeldata.dat $(SRC)/data.asm
 
 # Assemble, then move the banked parts to load addresses LOADM can use (tools/relocate.py)
 # DEFS: extra lwasm options for trying things, e.g. make -B run DEFS=-DLADCOL=175 (-B forces a rebuild;
@@ -63,13 +72,14 @@ $(BUILD)/vael.bin: $(SOURCES) tools/relocate.py | $(BUILD)
 	$(PYTHON) tools/relocate.py $(BUILD)/vael.raw $@
 
 $(DISK): $(BUILD)/vael.bin $(BUILD)/vaeldata.dat tools/mkdsk.py
+	$(PYTHON) tools/mktunes.py --check $(BUILD)/data.lst
 	$(PYTHON) tools/mkdsk.py $@ VAEL.BIN=$(BUILD)/vael.bin VAELDATA.DAT=$(BUILD)/vaeldata.dat:1
 
 run: $(DISK)
-	$(XROAR) $(XROAR_FLAGS) -tv-input rgb -run $(BUILD)/vael.bin
+	$(XROAR) $(XROAR_FLAGS) $(AO) -tv-input rgb -run $(BUILD)/vael.bin
 
 run-cmp: $(DISK)
-	$(XROAR) $(XROAR_FLAGS) -tv-input cmp -run $(BUILD)/vael.bin
+	$(XROAR) $(XROAR_FLAGS) $(AO) -tv-input cmp -run $(BUILD)/vael.bin
 
 shot: $(SOURCES) $(DISK) | $(BUILD)
 	$(ASM) -D AUTOMON=$$(printf '%d' "'$(strip $(SHOT_MON))") $(SHOT_DEFS) --list=$(BUILD)/shot.lst \
@@ -111,6 +121,22 @@ keys: | $(BUILD)
 	printf '        fcc     "%s"\n' "$(KEYS)" > $(BUILD)/autokeys.inc
 	$(MAKE) shot SHOT_DEFS=-DAUTOKEYS SHOT_AT=walkdone SHOT_NAME=keys
 
+tunes: | $(BUILD)
+	@mkdir -p $(SHOTDIR)
+	$(PYTHON) tools/mktunes.py $(BUILD)/tunes.asm --wav $(SHOTDIR)
+
+# Check the tune player's samples are evenly spaced: play tune TUNE (1 lose, 2 win) in XRoar with a
+# trace and time every pass of its loop (tools/tunetime.py). Run it after changing src/tune.asm.
+TUNE ?= 2
+tunetime: $(SOURCES) $(DISK) | $(BUILD)
+	$(ASM) -D AUTOMON=82 -D TUNETEST=$(TUNE) --symbol-dump=$(BUILD)/tt.sym -o $(BUILD)/tt.raw $(SRC)/main.asm
+	$(PYTHON) tools/relocate.py $(BUILD)/tt.raw $(BUILD)/tt.bin
+	@addr=$$(awk '$$1=="smp" {sub(/\$$/,"",$$3); print $$3}' $(BUILD)/tt.sym); \
+	timeout 300 $(XROAR) $(XROAR_FLAGS) -ui null -ao null -no-ratelimit -run $(BUILD)/tt.bin \
+	    -trap pc=0x$$addr -trap-range 1 -trap-trace-n 300000 -trace-timing -timeout 100 \
+	    > $(BUILD)/trace.txt 2>&1 || true
+	$(PYTHON) tools/tunetime.py $(BUILD)/trace.txt $(BUILD)/tt.sym
+
 # Profile one frame: build with SHOT_DEFS, trace the PROF_N'th render with XRoar (big temporary file),
 # then add up the cycles per routine. e.g. make profile SHOT_DEFS="-DAUTOWALK=80 -DSTARTLIGHT=7 -DSEEDVAL=0" PROF_N=26
 PROF_N ?= 2
@@ -127,4 +153,4 @@ profile: $(SOURCES) $(DISK) | $(BUILD)
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all run run-cmp shot fontshot askshot walk mazecheck keys shapes profile clean
+.PHONY: all run run-cmp shot fontshot askshot walk mazecheck keys shapes tunes tunetime profile clean

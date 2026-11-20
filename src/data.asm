@@ -6,6 +6,7 @@
         org     $C000
         include "icons.asm"
         include "monsters.asm"
+        include "tune.asm"
 dataend
         ifgt    dataend-$E000
         error   "the data is over 8K: start using the second block ($3E)"

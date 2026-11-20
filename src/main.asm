@@ -261,6 +261,12 @@ walkloop
         bra     walkloop
 walkdone bra    walkdone        ; timing results in frames, totdraw, maxdraw
         else
+        ifdef   TUNETEST
+        lda     #TUNETEST       ; play a tune, then stop (make shot SHOT_DEFS=-DTUNETEST=2 SHOT_AT=tunedone)
+        sta     tunereq
+        lbsr    tunego
+tunedone bra    tunedone
+        endc
         lbsr    title
 mainloop
         lbsr    gameclock       ; seconds of play: the light burns
@@ -281,6 +287,7 @@ mainloop
         lbeq    mainloop
         lbsr    paintdirty      ; messages first, then the view
         lbsr    drawframe
+        lbsr    tunego          ; the game just ended: its tune, over the end screen
         bsr     @still
         lbra    mainloop
 * The play clock stands still while the CoCo draws and works: the web version draws instantly, so
@@ -296,6 +303,20 @@ akeyp   fdb     akeys
 akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
         fcb     0
         endc
+
+* tunego: play the tune asked for (tunereq 1 lose, 2 win; the player is in the data bank, tune.asm)
+tunego  lda     tunereq
+        beq     @r
+        clr     tunereq
+        ldb     #BANKDAT
+        stb     MMUT0+6
+        jsr     tuneplay
+        ldb     #BANKCOM
+        stb     MMUT0+6
+        lbsr    kbflush         ; (keys held while it played aren't commands)
+@r      rts
+tunereq fcb     0
+pbddr   fcb     0               ; PIA 1 port B direction as BASIC left it (for checking)
 
 * title: the static title screen; the command line takes a seed
 title   clr     gmode
@@ -716,6 +737,18 @@ irqinit lda     #$7E            ; JMP irqh at the CoCo 3's IRQ vector
         lda     $FF23
         anda    #$FE
         sta     $FF23
+        anda    #$FB            ; the single-bit sound line (PIA 1 PB1): an output, held low. BASIC
+        sta     $FF23           ; leaves it an input, floating, which can add noise to the sound
+        lda     $FF22           ; (read the data direction register, set bit 1, back to data)
+        sta     pbddr
+        ora     #$02
+        sta     $FF22
+        lda     $FF23
+        ora     #$04
+        sta     $FF23
+        lda     $FF22
+        anda    #$FD
+        sta     $FF22
         lda     PIA0A           ; clear any pending PIA flags
         lda     PIA0B
         lda     #$6C            ; as before, plus GIME IRQs on

@@ -212,6 +212,7 @@ die     lbsr    msg
         clr     vmode
         lda     #1
         sta     vdirty
+        sta     tunereq         ; the lose tune
         rts
 
 * ---- names and matching ----

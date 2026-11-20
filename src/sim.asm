@@ -898,7 +898,9 @@ c_xxx   ldd     px
         lbra    killmon
 
 * win: the crown in your hand (the reference's win)
-win     ldy     #m_won
+win     lda     #2              ; the win tune
+        sta     tunereq
+        ldy     #m_won
         lbsr    msg
         ldy     #m_restart
         lbsr    msg
