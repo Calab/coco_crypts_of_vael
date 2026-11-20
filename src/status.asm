@@ -1,10 +1,10 @@
 * The status rows (21 and 22) are built in SROW first and then drawn a cell at a time (sflush), so
 * each cell goes straight from its old character to its new one. Text rows are drawn on the page
 * being shown too; blanking the rows first and then writing on them made the hands and health flash
-* (Steve). In the common bank (the font is needed anyway); SROW is the unused top of the bank.
+* (Steve). In the common bank (the font is needed anyway); SROW is in the direct page's free part.
 *
 * A character with bit 7 set is light blue; the heart's characters are red; the rest green.
-SROW    equ     $DFB0           ; 80 bytes: row 21, then row 22
+SROW    equ     $0D80           ; 80 bytes ($0D80-$0DCF, filled before it's read): row 21, then row 22
 
 * sclear: both rows blank
 sclear  pshs    d,x

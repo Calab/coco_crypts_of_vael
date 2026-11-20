@@ -1575,7 +1575,7 @@ freshen ldx     #fresht
         subd    #10000
         std     ,y
 @ok     rts
-fresht  fdb     lasthurt,lastmove,laststruck,nextwarn,nextsound,atkready,atkready+2,hbnext,nextcry,0
+fresht  fdb     lasthurt,lastmove,laststruck,nextwarn,nextsound,atkready,atkready+2,nextcry,0
 
 * SOUND [0-9]: the volume of the sound effects (the reference's: 6 to start; SOUND alone turns them
 * off, or back on at the last volume)

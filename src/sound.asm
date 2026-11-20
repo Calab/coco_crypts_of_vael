@@ -226,11 +226,11 @@ v1tab   fdb     v1off,v1saw,v1sq,v1tri,v1noi,v1off
 * sndplay: start sound A (SFX_...) at loudness B (0-255, e.g. less for a distant monster). It goes on
 * the sound's voice, unless that voice is playing something more important. Keeps all registers.
 sndplay pshs    cc,d,x,y,u
-        lda     <smaster
+        orcc    #$50            ; (the interrupts mustn't see a voice half set up; and the IRQ's
+        lda     <smaster        ;   heartbeat, hbtick, calls this too: stmp is shared)
         beq     @r
         mul                     ; loudness x SOUND volume
         sta     <stmp
-        orcc    #$50            ; (the interrupt mustn't see a voice half set up)
         ldb     MMUT0+6
         andb    #$3F
         pshs    b
@@ -401,6 +401,26 @@ crypick pshs    a               ; 2,s: count down to the one wanted
         leas    3,s
         rts
 nextcry fdb     0
+
+* hbtick: (the 60 Hz IRQ) the heartbeat's sound when a beat is due, so it keeps time while the main
+* loop is busy drawing (Steve: from the main loop it went erratic). heartbeat (main loop) sets the
+* period and switches it on or off, and shows the big heart when hbflag says a beat sounded.
+hbtick  tst     <hbon
+        beq     @r
+        ldd     ticks
+        subd    <hbnt
+        bmi     @r
+        cmpd    <hbper          ; a whole beat or more late (just switched on): beat now, time from here
+        blo     @n
+        ldd     ticks
+        std     <hbnt
+@n      ldd     <hbnt
+        addd    <hbper
+        std     <hbnt
+        inc     <hbflag
+        lda     #SFX_BEAT
+        lbra    sfxa
+@r      rts
 
 sndres_end
         ifgt    sndres_end-$FEEE

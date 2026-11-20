@@ -22,6 +22,14 @@
 #   make tunetime   check the tune player keeps its samples evenly spaced (TUNE=1 or 2)
 #   make profile    where a frame's time goes (see below)
 #   make clean
+#
+# Build options: -D NAME[=value], in DEFS="..." for make / make run, or SHOT_DEFS="..." for shot / keys /
+# walk. The release (plain make) uses none. After make -B run DEFS=..., make -B again for the release.
+#   TESTCMDS        the X test commands (XXX, XLIGHT, XJUMP, XDEPTH, XINFO); shot and profile add it
+#   AUTOMON, AUTOKEYS, AUTOWALK, SEEDVAL, STARTLIGHT=7|4|0, STARTHP=n, BIGHIT, FXHOLD=n, TUNETEST=1|2
+#                   headless testing (see CLAUDE.md)
+#   FONTTEST, MAZETEST  test screens;  WALLCOL, LADCOL, ITEMCOL=byte  colours to try (decimal)
+#   NOFAST, NODOTS, PROF_NOMON, PROF_NOPEEK, PROF_NOLINE, LINELOG  drawing and timing checks
 
 LWASM   = lwasm
 XROAR   = xroar

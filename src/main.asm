@@ -84,6 +84,10 @@ deepest equ     $0D6E           ; the deepest level reached (deepck)
 gwon    equ     $0D6F           ; the game was won (win)
 dwhy    equ     $0D70           ; 2: how you died: the message die was given, or 0 for a monster's blow
 dkind   equ     $0D72           ; ...whose kind is this
+hbon    equ     $0D73           ; the heartbeat is going (heartbeat sets it; hbtick, in the IRQ, beats)
+hbflag  equ     $0D74           ; hbtick beat: the main loop shows the big heart
+hbnt    equ     $0D75           ; 2: when the next beat is due (ticks)
+hbper   equ     $0D77           ; 2: ticks between beats (heartbeat works it out)
 
         org     $0E00
 
@@ -321,7 +325,9 @@ mainloop
         endc
         ifdef   AUTOKEYS
 walkdone bra    walkdone        ; the scripted keys ran out
-akeyp   fdb     akeys           ; (the script itself is in the high code, after help.asm: room)
+akeyp   fdb     akeys
+akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
+        fcb     0
         endc
 
 * sndcopy: copy the sound engine's image (the start of bank BANKSND, from the data file) up to $FC00,
@@ -542,53 +548,6 @@ doact   cmpa    #'U
         anda    #3
         ldb     #1
         lbra    turn
-
-        ifdef   TESTCMDS
-* jump (test command XJUMP): stand facing the far cell (the down ladder; on level 5, where the king
-* waits), two cells away if the passage allows, else one.
-jump    clr     tdir1
-@dir    ldb     tdir1           ; one cell back from the ladder, against direction tdir1
-        ldx     #dx1
-        lda     farx
-        suba    b,x
-        sta     tx
-        ldx     #dy1
-        lda     fary
-        suba    b,x
-        sta     ty
-        tfr     a,b
-        lda     tx
-        lbsr    iswall
-        beq     @found
-        inc     tdir1
-        lda     tdir1
-        cmpa    #4
-        blo     @dir
-@none   rts
-@found  lda     tx              ; stand there, then try one more cell back
-        sta     px
-        lda     ty
-        sta     py
-        ldb     tdir1
-        stb     pdir
-        ldx     #dx1
-        lda     tx
-        suba    b,x
-        sta     tx
-        ldx     #dy1
-        lda     ty
-        suba    b,x
-        sta     ty
-        tfr     a,b
-        lda     tx
-        lbsr    iswall
-        bne     @done
-        lda     tx
-        sta     px
-        lda     ty
-        sta     py
-@done   rts
-        endc
 
 * turn: A = new direction, B = 1 turning right or -1 left. Draws the halfway pan frame; the
 * caller's normal frame then shows the full turn.
@@ -838,7 +797,8 @@ irqh    lda     IRQENR          ; acknowledge
         bne     @k
         lda     palsh
         sta     PALETTE
-@k      lbsr    kbscan          ; the keyboard
+@k      lbsr    hbtick          ; the heartbeat's sound, on time (sound.asm)
+        lbsr    kbscan          ; the keyboard
         rti
 
 * printat: A = row, B = column, Y = string
@@ -878,7 +838,7 @@ askpal  fcb     $00,$3F,$3F,$3F ; black and white: looks the same on either moni
 
 s_title fcn     "CRYPTS OF VAEL"
 s_credit fcn    "BY STEVE NORTON AND CLAUDE AI"
-s_version fcn   "VERSION 0.1.0" ; the game's version (semver: bump it only when Steve asks)
+s_version fcn   "VERSION 1.0.0" ; the game's version (semver: bump it only when Steve asks)
 s_ask1  fcn     "PRESS R FOR RGB MONITOR"
 s_ask2  fcn     "OR C FOR COMPOSITE"
 s_nodata fcn    "VAELDATA.DAT IS MISSING FROM THE DISK"
@@ -936,10 +896,6 @@ progend
         include "map.asm"
         include "attack.asm"
         include "help.asm"
-        ifdef   AUTOKEYS
-akeys   include "autokeys.inc"  ; written by make: fcc "<KEYS>"  ('/' = ENTER)
-        fcb     0
-        endc
 highend
         ifgt    highend-$FC00
         error   "high code is past $FBFF (its load copy must end below $7C00)"
@@ -977,9 +933,12 @@ ovlend
         include "strings.asm"
         include "crylv.asm"
         include "status.asm"
+        ifdef   TESTCMDS
+        include "testbank.asm"  ; (test builds: help for the test commands)
+        endc
 bankcomend
-        ifgt    bankcomend-SROW
-        error   "common bank runs into SROW (the status rows' buffer at its top)"
+        ifgt    bankcomend-(BANKWIN+$2000)
+        error   "common bank is over 8K"
         endc
 
 * ---- Scratch bank (block BANKSCR at $C000-$DFFF while mklevel runs): not loaded ----

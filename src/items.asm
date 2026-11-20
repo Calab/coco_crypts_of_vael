@@ -45,7 +45,7 @@ newplayer
         lbsr    endreset        ; the end screen's numbers
         std     atkready
         std     atkready+2
-        std     hbnext
+        clr     <hbon
         clr     hbbig
         sta     strain
         std     strain+1
@@ -1063,40 +1063,45 @@ drawheart
 
 * heartbeat: from the main loop, as the reference's: a beat every (180 + 920 x health^1.5) ms
 * (health as a share of the most), quicker when fatigued (/ (1 + fatigue / 6)), at least 150 ms;
-* the big heart shows for 100 ms of each beat. Only while playing and the status row is showing.
+* the big heart shows for 100 ms of each beat. Only while playing and the status row is showing. The
+* beat itself is timed and sounded by hbtick in the IRQ; this sets its period and shows the heart.
 heartbeat
         lda     gmode
         cmpa    #1
-        bne     @ret
+        bne     @off
         lda     paused
         ora     pending
-        bne     @ret
+        bne     @off
         lda     vmode           ; a map or the help covers the status row
         beq     @shown
         cmpa    #3
-        bne     @ret
-@shown
-        tst     hbbig           ; the end of a beat
+        bne     @off
+@shown  tst     <hbon           ; switching on: the first beat at once (hbtick)
+        bne     @on
+        bsr     hbperiod
+        std     <hbper
+        ldd     ticks
+        std     <hbnt
+        inc     <hbon
+@on     tst     hbbig           ; the end of a beat
         beq     @due
         ldd     ticks
         subd    hboff
         bmi     @due
         clr     hbbig
         bsr     hbshow
-@due    ldd     stime           ; a new beat?
-        subd    hbnext
-        bmi     @ret
-        lda     #SFX_BEAT
-        lbsr    sfxa
+@due    tst     <hbflag         ; hbtick (the IRQ) sounded a beat: the big heart, and the next period
+        beq     @ret
+        clr     <hbflag
+        bsr     hbperiod
+        std     <hbper
         lda     #1
         sta     hbbig
         ldd     ticks
         addd    #6
         std     hboff
-        bsr     hbperiod
-        addd    stime
-        std     hbnext
         bra     hbshow
+@off    clr     <hbon
 @ret    rts
 
 * hbshow: redraw the heart on both screen pages
@@ -1173,7 +1178,6 @@ acc     fdb     0
 dtick   fdb     0
 hbbig   fcb     0               ; the heart: beating (big) now?
 hboff   fdb     0               ; when this beat's big heart goes (ticks)
-hbnext  fdb     0               ; when the next beat comes (stime)
 hbn     fdb     0
 hbd     fdb     0
 ltmp45  fcb     0
