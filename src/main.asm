@@ -865,7 +865,7 @@ askpal  fcb     $00             ; black and white: looks the same on either moni
 
 s_title fcn     "CRYPTS OF VAEL"
 s_credit fcn    "BY STEVE NORTON AND CLAUDE AI"
-s_version fcn   "VERSION 1.1.0" ; the game's version (semver: bump it only when Steve asks)
+s_version fcn   "VERSION 1.1.1" ; the game's version (semver: bump it only when Steve asks)
 s_ask1  fcn     "PRESS R FOR RGB MONITOR"
 s_ask2  fcn     "OR C FOR COMPOSITE"
 s_nodata fcn    "VAELDATA.DAT IS MISSING FROM THE DISK"

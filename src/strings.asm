@@ -1,6 +1,6 @@
 * Words and messages (in the common bank). Message text is the reference's unless marked (ours).
 
-* Verbs, in the reference's order (SAVE, LOAD, MUSIC, ANIMATE removed; MONITOR and the X test
+* Verbs, in the reference's order (SAVE, LOAD, MUSIC, ANIMATE removed; MONITOR, INVENTORY and the X test
 * commands added at the end). Entry: flag (1 = must be typed in full), word, 0. The order decides
 * abbreviations: the first verb that starts with what's typed wins (D = DROP, DE = DESCEND).
 verbs   fcb     0
@@ -43,17 +43,19 @@ verbs   fcb     0
         fcn     "SEED"          ; 18
         fcb     0
         fcn     "MONITOR"       ; 19
+        fcb     0
+        fcn     "INVENTORY"     ; 20 (ours, Steve 2026-11-21): the same as EXAMINE
         ifdef   TESTCMDS        ; the test commands: only in test builds (make shot / keys / walk), not
         fcb     1               ;   the release (Steve)
-        fcn     "XXX"           ; 20
+        fcn     "XXX"           ; 21
         fcb     1
-        fcn     "XLIGHT"        ; 21 test: cycle the light
+        fcn     "XLIGHT"        ; 22 test: cycle the light
         fcb     1
-        fcn     "XJUMP"         ; 22 test: face the down ladder
+        fcn     "XJUMP"         ; 23 test: face the down ladder
         fcb     1
-        fcn     "XDEPTH"        ; 23 test: XDEPTH n goes to level n
+        fcn     "XDEPTH"        ; 24 test: XDEPTH n goes to level n
         fcb     1
-        fcn     "XINFO"         ; 24 test: position, facing, draw time
+        fcn     "XINFO"         ; 25 test: position, facing, draw time
         endc
         fcb     $FF
 

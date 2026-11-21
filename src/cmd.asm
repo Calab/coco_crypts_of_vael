@@ -88,6 +88,8 @@ overcmd lbsr    tokenize
         lbsr    matchw
         cmpa    #V_EXAMINE
         lbeq    c_examine
+        cmpa    #V_INVENTORY
+        lbeq    c_examine
         cmpa    #V_LOOK
         beq     @look
         cmpa    #V_REVEAL
@@ -443,10 +445,11 @@ V_PAUSE equ     13
 V_REVEAL equ    1
 V_LOOK  equ     9
 V_EXAMINE equ   10
+V_INVENTORY equ 20
 
 vjump   fdb     c_move,c_reveal,c_turn,c_attack,c_get,c_drop,c_stow,c_pull
         fdb     c_use,c_look,c_examine,c_descend,c_ascend,c_pause,c_quit,c_sleep
-        fdb     c_help,c_sound,c_seed,c_monitor
+        fdb     c_help,c_sound,c_seed,c_monitor,c_examine
         ifdef   TESTCMDS
         fdb     c_xxx,c_xlight,c_xjump,c_xdepth,c_xinfo
         endc

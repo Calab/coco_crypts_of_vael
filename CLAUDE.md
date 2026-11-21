@@ -170,6 +170,8 @@ with CMOC is allowed for non-critical parts if it saves time. Line drawing and s
   Geometry from `ltab` (`mktables.py`); drawn by `contents`/`ladder` in `view.asm`, far to near after the
   walls.
 - **Commands:** REVEAL stays. The SHIFT-F3 shortcut is removed. SAVE, LOAD, ANIMATE and MUSIC are removed.
+  INVENTORY (ours, Steve 2026-11-21) does the same as EXAMINE (also after the game ends); `I` is
+  enough. HELP lists it as "EXAMINE / INVENTORY".
 - **Items, part 1 (2026-11-19): placement and drawing.**
   - Placement is the reference's `buildLevel` (`placeitems` in `maze.asm`): used = {start, far}, seed 0's
     showcase cells on level 1 (path steps 3, 5 … 15 from (1,1) toward the far cell), then the level's own
@@ -384,8 +386,9 @@ with CMOC is allowed for non-critical parts if it saves time. Line drawing and s
   top of `helptext.asm`. Never mention REVEAL. (lwasm's raw output doesn't fill an `org` gap: pad
   with `fill`.)
 - **Title (2026-11-19, Steve):** "CRYPTS OF VAEL", then "BY STEVE NORTON AND CLAUDE AI" and "VERSION
-  1.1.0" in mid white (`s_credit`, `s_version` in `main.asm`). 0.1.0 was the first version; **1.0.0
-  is the first release** (Steve, 2026-11-20). 1.1.0 (Steve, 2026-11-21): a small gameplay change (PULL takes the pack number). Bump it only when Steve asks.
+  1.1.1" in mid white (`s_credit`, `s_version` in `main.asm`). 0.1.0 was the first version; **1.0.0
+  is the first release** (Steve, 2026-11-20). 1.1.0 (Steve, 2026-11-21): a small gameplay change (PULL takes the pack number). 1.1.1
+  (Steve, 2026-11-21): INVENTORY added. Bump it only when Steve asks.
 - **Attack pictures (2026-11-19, for Steve to look at)** (`src/attack.asm`, data `src/fxpics.asm` +
   `src/fxid.inc` from `tools/mkfx.py`, run by `make shapes`, kept in `src/`): one frame each of the
   reference's `drawSwing` and `drawStrike`, worked out in Python in screen terms (the reference's view

@@ -7,7 +7,7 @@
 * PICK UP INTO A HAND -> TAKE INTO A HAND; PUT DOWN WHAT IT HOLDS -> PUT IT DOWN; PUT IT IN YOUR PACK
 * -> PUT IN YOUR PACK; TAKE IT FROM YOUR PACK -> TAKE FROM PACK; LIGHT, DRINK, READ -> LIGHT/DRINK/
 * READ; SHOW OR CHANGE THE MAZE -> SHOW/CHANGE MAZE; the footer's three lines below. Left out: the
-* title COMMANDS, SAVE / LOAD, MUSIC, ANIMATE (removed). Added: MONITOR.
+* title COMMANDS, SAVE / LOAD, MUSIC, ANIMATE (removed). Added: MONITOR, INVENTORY.
         fcn     "{MOVING~}  LOOK TO RETURN"
         fcn     " MOVE~STEP FORWARD"
         fcn     " MOVE BACK|LEFT|RIGHT~STEP THAT WAY"
@@ -22,7 +22,7 @@
         fcn     " STOW L|R~PUT IN YOUR PACK"
         fcn     " PULL L|R ITEM~TAKE FROM PACK"
         fcn     " USE L|R OR USE ITEM~LIGHT/DRINK/READ"
-        fcn     " EXAMINE~SEE YOUR PACK"
+        fcn     " EXAMINE / INVENTORY~SEE YOUR PACK"
         fcn     "{GAME"
         fcn     " PAUSE / QUIT"
         fcn     " SEED [NUMBER]~SHOW/CHANGE MAZE"
