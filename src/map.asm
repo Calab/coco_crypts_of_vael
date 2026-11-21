@@ -6,8 +6,9 @@
 *   mapdraw   draw the map on the page being drawn: title on row 0, maze on rows 1-21, legend row 22
 *   seensave / seenload / seenclear   each level's seen cells live in BANKLVL between visits
 *
-* Colours: walls green (unseen ones in 50% dots), ladders the red/green mix as in the corridor (V down,
-* ^ up), you a light blue arrow; a legend of those three left of the maze. Items (diamonds) and monsters (red letters) on REVEAL.
+* Colours (320x16): walls bright white (unseen ones on REVEAL mid white), ladders cyan (V down, ^ up),
+* you a green arrow with a red one inside; a legend of those three left of the maze. Items (yellow
+* diamonds) and monsters (red letters) on REVEAL.
 
 * markseen: as the reference: each open cell straight ahead within the light range, and the cells
 * either side of it
@@ -229,11 +230,11 @@ mapdraw lbsr    clrfull
         lda     #1
         sta     mwant
         lbsr    edges
-        lda     vmode           ; REVEAL: the rest too, dotted
+        lda     vmode           ; REVEAL: the rest too, in a dimmer white
         cmpa    #2
         bne     @lad
-        lda     #$AA
-        lbsr    setpat
+        lda     #MAPDIM
+        lbsr    setcol
         clr     mwant
         lbsr    edges
 @lad    lda     #$FF
@@ -360,7 +361,7 @@ legend  lda     #TXBLUE
         sta     myc
         rts
 
-* youmark: you, at mxc, myc pointing way B: a light blue arrow outline drawn twice, the second a
+* youmark: you, at mxc, myc pointing way B: a green arrow outline drawn twice, the second a
 * pixel larger each way for a thicker line (Steve: it was almost invisible), and a half-size red
 * one inside it (Steve)
 youmark stb     mdir
@@ -368,7 +369,7 @@ youmark stb     mdir
         pshs    d
         ldd     mbx
         pshs    d
-        lda     #TXBLUE
+        lda     #TXGREEN        ; (orange was too close to the red inside: Steve)
         lbsr    setcol
         ldb     mdir
         lbsr    arrowc

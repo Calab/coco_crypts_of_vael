@@ -46,7 +46,12 @@ helpdraw
         ldb     #24
         lbsr    textpos
         bra     @blue
-@b      cmpa    #'|
+@b      cmpa    #'}             ; cyan from here (LOOK TO RETURN: Steve)
+        bne     @bar
+        ldb     #TXCYAN
+        stb     textmask
+        bra     @ch
+@bar    cmpa    #'|
         bne     @p
         lda     #$62            ; (the font's BAR)
 @p      lbsr    putc

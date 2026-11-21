@@ -143,8 +143,15 @@ fxdraw  tst     fxon
         bsr     fxpic1
 @r      rts
 
-* fxpic1: draw picture A, flipped (x = M - x) if B is nonzero
+* fxpic1: draw picture A, flipped (x = M - x) if B is nonzero. Your swung item is yellow like the
+* items (Steve); the fist and the monsters' blows orange. (The colour byte each polyline carries from
+* mkfx.py isn't used.)
 fxpic1  stb     fxfl
+        ldb     #HITCOL
+        cmpa    #FX_FIST
+        bhs     @col
+        ldb     #ITEMCOL
+@col    stb     fxcol
         lsla
         ldb     #BANKSND
         stb     MMUT0+6
@@ -158,8 +165,7 @@ fxpic1  stb     fxfl
         beq     @done
         sta     fxn
         sta     fxc
-        ldd     ,x++
-        sta     fxcol
+        ldd     ,x++            ; (A: the unused colour byte)
         stb     fxpat
         ldu     #ptbuf
 @pt     ldb     ,x+             ; x / 2.5 -> x

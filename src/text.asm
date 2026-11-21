@@ -1,4 +1,4 @@
-* Text: 16x8 characters (true 16 wide, 1 bit per pixel in the font), 40 columns x 24 rows.
+* Text: 8x8 characters (4 bits per pixel on screen, 1 bit per pixel in the font), 40 columns x 24 rows.
 * The font and its expansion table come from build/font.asm (generated from src/font.txt).
 
 * textpos: A = row (0-23), B = column (0-39). Returns X = screen address of that cell.

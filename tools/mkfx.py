@@ -5,7 +5,7 @@
                                                        build doesn't need gjs)
 
 Each picture is worked out here in screen terms, at one moment of the reference's animation, already
-clipped to the view (640 x VIEWH), so the game only draws lines:
+clipped to the view (640 x VIEWH, logical x), so the game only draws lines:
   * swing (FX_SWING + item kind, or FX_FIST): your attack with the right hand. A held item sweeps in
     an arc from the side (the reference's faint motion trail behind it is left out, Steve); a shield or an
     empty hand thrusts forward instead. The left hand is the mirror image (the game flips x).

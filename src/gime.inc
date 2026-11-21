@@ -17,12 +17,12 @@ MMUT1   equ     $FFA8           ; MMU task 1
 PALETTE equ     $FFB0           ; 16 palette registers ($FFB0-$FFBF)
 SPEEDHI equ     $FFD9           ; write: CPU at 1.79 MHz
 
-* Video mode values for 640x192, 4 colours
+* Video mode values for 320x192, 16 colours
 VMODE_GFX equ   $80             ; bit-plane graphics, 1 line per row
-VRES_640x4 equ  $1D             ; 192 lines, 160 bytes per row, 4 colours
+VRES_320x16 equ $1E             ; 192 lines, 160 bytes per row, 16 colours
 
 * Screen geometry
-SCRW    equ     640
+SCRW    equ     640             ; logical width (x 0-639; line halves it)
 SCRH    equ     192
 ROWB    equ     160             ; bytes per row
 SCRBYTES equ    ROWB*SCRH       ; 30720

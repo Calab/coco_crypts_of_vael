@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Turn an XRoar CoCo 3 snapshot into a PNG of the 640x192 4-colour screen.
+"""Turn an XRoar CoCo 3 snapshot into a PNG of the 320x192 16-colour screen (each pixel drawn 2 wide).
 
     snap2png.py SNAPSHOT SYMBOLS OUT.png [--raw]
 
 SYMBOLS is the lwasm --symbol-dump file. The program must define:
     voffsh  2 bytes: the value it last wrote to the GIME vertical offset ($FF9D/E)
-    palsh   4 bytes: the palette it last wrote ($FFB0-$FFB3)
+    palsh   16 bytes: the palette it last wrote ($FFB0-$FFBF)
 Both must sit in CPU $0000-$3FFF, which this tool assumes is mapped to physical
 blocks $38-$39 (the power-on map; the game never remaps those two slots).
 
-By default each row is doubled (640x384), which is close to the shape a monitor
-shows (CoCo 3 pixels are about 2.5 times taller than wide) while keeping dither
-patterns even. --raw gives 640x192.
+Each pixel is drawn 2 wide and by default each row is doubled (640x384), which is
+close to the shape a monitor shows. --raw gives 640x192.
 
 Standard library only (no PIL). Shares tools/snapshot.py.
 """
@@ -54,15 +53,16 @@ def main():
             sys.exit('symbol %s not found in %s' % (need, symf))
     hi, lo = cpu_low(ram, sym['voffsh'], 2)
     voff = (hi << 8) | lo
-    pal = [rgb(c) for c in cpu_low(ram, sym['palsh'], 4)]
+    pal = [rgb(c) for c in cpu_low(ram, sym['palsh'], 16)]
     base = voff * 8
     rows = []
     for y in range(192):
         line = bytearray()
         for x in range(160):
             byte = ram[(base + y * 160 + x) % len(ram)]
-            for shift in (6, 4, 2, 0):
-                line += pal[(byte >> shift) & 3]
+            for shift in (4, 0):        # 320x16: 2 pixels a byte
+                px = pal[(byte >> shift) & 15]
+                line += px + px         # each pixel 2 wide
         rows.append(bytes(line))
     if '--raw' in sys.argv:
         write_png(out, 640, 192, rows)

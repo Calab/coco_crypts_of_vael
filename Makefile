@@ -38,7 +38,7 @@ PYTHON  = python3
 
 BUILD   = build
 SRC     = src
-SHOTDIR = $(HOME)/tmp
+SHOTDIR = $(HOME)/tmp/vael
 
 DISK        = $(BUILD)/vael.dsk
 DIST        = dist/crypts-of-vael.dsk

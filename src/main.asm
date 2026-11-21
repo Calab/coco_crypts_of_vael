@@ -18,20 +18,26 @@
 
 SCRCPU  equ     $4000           ; where the page being drawn is mapped (CPU $4000-$BFFF)
 
-* Text colours for textmask, and colours as line fill bytes
-TXGREEN equ     $55             ; colour 1
-TXRED   equ     $AA             ; colour 2
-TXBLUE  equ     $FF             ; colour 3
+* The 16 palette entries (Steve's scheme, 2026-11-20; tables rgbpal / cmppal below):
+*   0 black; 1-3 walls white (bright to dim); 4-7 enemies red; 8-10 items yellow; 11-13 ladders
+*   cyan; 14 text green (also you on the map); 15 orange (attack pictures).
+* A colour byte (textmask, setcol) is the entry in both nibbles. In the corridor, walls, monsters,
+* items and ladders fade by distance through their shade tables (wallshd... in tables.asm).
+TXGREEN equ     $EE             ; text
+TXRED   equ     $55             ; the heart, monster letters on REVEAL, YOU HAVE PERISHED
+TXBLUE  equ     $22             ; mid white: older messages, headings, the title's credits
+TXCYAN  equ     $BB             ; status row: the hands
+TXYELLOW equ    $88             ; status rows: health, RANK and XP
+HITCOL  equ     $FF             ; orange: attack pictures
+MAPDIM  equ     $22             ; REVEAL: walls you haven't seen (second white of three)
         ifndef  WALLCOL
-WALLCOL equ     TXGREEN
+WALLCOL equ     $11             ; bright white (the map's seen walls; the corridor uses wallshd)
         endc
-* Ladder colour: a fill byte gives each of a byte's 4 pixels its own colour, so a mix in 2-pixel
-* runs dithers along the line (fine for the ladder, which has no exactly vertical lines).
         ifndef  LADCOL
-LADCOL  equ     $A5             ; red, red, green, green: reads as an olive-gold "yellow"
+LADCOL  equ     $BB             ; bright cyan (the map; the corridor uses ladshd)
         endc
         ifndef  ITEMCOL
-ITEMCOL equ     TXBLUE          ; solid light blue (the blue/green mix was tried and didn't read well)
+ITEMCOL equ     $88             ; bright yellow (the map; the corridor uses itemshd)
         endc
 
 * Two screen pages: draw on the hidden one, then show it.
@@ -115,7 +121,7 @@ start   lbsr    dataload        ; while BASIC still runs: read VAELDATA.DAT (the
         sta     INIT0
         lda     #VMODE_GFX
         sta     VMODE
-        lda     #VRES_640x4
+        lda     #VRES_320x16
         sta     VRES
         clr     BORDER
         clr     HOFF
@@ -809,11 +815,11 @@ irqh    lda     IRQENR          ; acknowledge
 printat lbsr    textpos
         lbra    puts
 
-* setpal: X = 4 palette bytes. Copies them to palsh and the GIME.
+* setpal: X = 16 palette bytes. Copies them to palsh and the GIME.
 setpal  pshs    d,x,y,u
         ldu     #palsh
         ldy     #PALETTE
-        ldb     #4
+        ldb     #16
 @next   lda     ,x+
         sta     ,u+
         sta     ,y+
@@ -835,14 +841,31 @@ setpal  pshs    d,x,y,u
 
 * ---- data ----
 
-* Palettes: 0 black, 1 green, 2 red, 3 light blue
-rgbpal  fcb     $00,$12,$24,$0F
-cmppal  fcb     $00,$12,$07,$1B
-askpal  fcb     $00,$3F,$3F,$3F ; black and white: looks the same on either monitor
+* Palettes (entries as listed at the top). RGB: R1 G1 B1 R0 G0 B0. White has only 3 true greys.
+* The brightest red is (3,1,1), as RGB has only 3 pure reds.
+rgbpal  fcb     $00             ; black
+        fcb     $3F,$38,$07     ; walls white: (3,3,3) (2,2,2) (1,1,1)
+        fcb     $27,$24,$20,$04 ; enemies red: (3,1,1) (3,0,0) (2,0,0) (1,0,0)
+        fcb     $36,$30,$06     ; items yellow: (3,3,0) (2,2,0) (1,1,0)
+        fcb     $1B,$18,$03     ; ladders cyan: (0,3,3) (0,2,2) (0,1,1)
+        fcb     $17             ; text green, mild: (1,3,1)
+        fcb     $26             ; orange: (3,1,0)
+* Composite: 2 intensity bits + hue. Only greys get really darker (intensity 0 is the darkest a hue
+* goes), so the colours fade little; the dots do the rest. Hues guessed (yellow 4, orange 6,
+* red 7, cyan 13): to check in make run-cmp.
+cmppal  fcb     $00
+        fcb     $30,$20,$10     ; white
+        fcb     $27,$17,$07,$07 ; red (they vary a lot, light to dark, but are acceptable: Steve)
+        fcb     $24,$14,$04     ; yellow
+        fcb     $2D,$1D,$0D     ; cyan
+        fcb     $12             ; green
+        fcb     $06             ; orange (the hurt flash's)
+askpal  fcb     $00             ; black and white: looks the same on either monitor
+        fcb     $3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F
 
 s_title fcn     "CRYPTS OF VAEL"
 s_credit fcn    "BY STEVE NORTON AND CLAUDE AI"
-s_version fcn   "VERSION 1.0.0" ; the game's version (semver: bump it only when Steve asks)
+s_version fcn   "VERSION 1.1.0" ; the game's version (semver: bump it only when Steve asks)
 s_ask1  fcn     "PRESS R FOR RGB MONITOR"
 s_ask2  fcn     "OR C FOR COMPOSITE"
 s_nodata fcn    "VAELDATA.DAT IS MISSING FROM THE DISK"
@@ -862,7 +885,8 @@ dirname fcn     "NORTH"         ; 6 bytes each
 * Variables. Shadow copies of display state: the GIME registers are write-only, so the
 * screenshot tool (tools/snap2png.py) reads these to know what is on screen.
 voffsh  fdb     0               ; value last written to VOFFHI/VOFFLO
-palsh   fcb     0,0,0,0         ; palette last written to $FFB0-$FFB3
+scol    fill    0,80            ; status.asm: the colour of each SROW cell (rows 21 and 22)
+palsh   fill    0,16            ; palette last written to $FFB0-$FFBF
 monitor fcb     0               ; 'R' or 'C'
 textmask fcb    TXGREEN         ; colour for putc
 putcrow fcb     0               ; putc's row counter

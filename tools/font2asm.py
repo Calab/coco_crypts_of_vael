@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Convert src/font.txt into assembly, checking the composite rule.
+"""Convert src/font.txt into assembly.
 
     font2asm.py FONT.txt OUT.asm
 
+Characters are 8x8 at 4 bits per pixel (4 screen bytes per character row).
+
 Output defines:
-    font     16 bytes per character (8 rows x 2 bytes, leftmost pixel in bit 7 of the first byte),
+    font     16 bytes per character, 8 rows x 2 bytes: pixels 0-3 of the row in the top 4 bits of the
+             first byte, pixels 4-7 in the top 4 bits of the second
              for codes FONT_FIRST .. FONT_FIRST+FONT_COUNT-1
-    fontexp  256 bytes: a font byte's left 4 pixels expanded to 2 bits per pixel (one screen byte)
-             followed by 256 bytes for its right 4 pixels
-Composite rule: in every row, each run of lit pixels is at least 2 wide. Gaps of 1 unlit pixel are allowed.
+    fontexp  256 bytes: a font byte's pixels 0-1 expanded to 4 bits per pixel (one screen byte)
+             followed by 256 bytes for its pixels 2-3 (only the top 4 bits of n matter)
 """
 import sys
 
@@ -24,21 +26,6 @@ def code_of(name):
     if len(name) == 1 and 0x21 <= ord(name) <= 0x5F:
         return ord(name)
     raise ValueError('unknown character name %r' % name)
-
-
-def check_row(row):
-    """Return an error message if the row breaks the composite rule, else None."""
-    runs = []                       # (lit?, length)
-    for ch in row:
-        lit = ch == '#'
-        if runs and runs[-1][0] == lit:
-            runs[-1][1] += 1
-        else:
-            runs.append([lit, 1])
-    for lit, n in runs:
-        if lit and n < 2:
-            return 'single lit pixel'
-    return None
 
 
 def parse(path):
@@ -61,12 +48,8 @@ def parse(path):
             continue
         rows = [lines[i + k].rstrip() for k in range(8)]
         for k, r in enumerate(rows):
-            if len(r) != 16 or set(r) - set('#.'):
-                errors.append('line %d (%s row %d): need 16 of # or ., got %r' % (i + k + 1, name, k, r))
-            else:
-                bad = check_row(r)
-                if bad:
-                    errors.append('line %d (%s row %d): %s: %s' % (i + k + 1, name, k, bad, r))
+            if len(r) != 8 or set(r) - set('#.'):
+                errors.append('line %d (%s row %d): need 8 of # or ., got %r' % (i + k + 1, name, k, r))
         if code in glyphs:
             errors.append('line %d: %s defined twice' % (i, name))
         glyphs[code] = rows
@@ -85,21 +68,18 @@ def main():
            'CH_BULLET equ $60', 'CH_CURSOR equ $61', 'CH_BAR equ $62',
            'CH_HEART equ $63', 'CH_HEART2 equ $65', '', 'font']
     for code in range(FIRST, LAST + 1):
-        rows = glyphs.get(code, ['.' * 16] * 8)
+        rows = glyphs.get(code, ['.' * 8] * 8)
         data = []
         for r in rows:
             bits = int(r.replace('#', '1').replace('.', '0'), 2)
-            data += [bits >> 8, bits & 0xFF]
+            data += [bits & 0xF0, (bits << 4) & 0xF0]
         label = chr(code) if 0x21 <= code <= 0x5F else {v: k for k, v in NAMED.items()}.get(code, '')
         out.append('        fcb     ' + ','.join('$%02X' % b for b in data) + '  ; $%02X %s' % (code, label))
-    out += ['', '* fontexp+n: left 4 pixels of font byte n at 2 bits each; fontexp+256+n: right 4 pixels', 'fontexp']
-    for half in (4, 0):
+    out += ['', '* fontexp+n: bits 7-6 of font byte n at 4 bits each; fontexp+256+n: bits 5-4', 'fontexp']
+    for half in (6, 4):
         for n in range(256):
-            nib = (n >> half) & 15
-            v = 0
-            for b in range(4):
-                if nib & (8 >> b):
-                    v |= 3 << (6 - 2 * b)
+            pair = (n >> half) & 3
+            v = (0xF0 if pair & 2 else 0) | (0x0F if pair & 1 else 0)
             if n % 16 == 0:
                 vals = []
             vals.append('$%02X' % v)

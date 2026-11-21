@@ -4,8 +4,9 @@
     mktables.py OUT.asm
 
 The corridor projection follows the reference's R(z): k = 1/(1 + 0.85 z), with the reference's
-800x440 view scaled to the CoCo's 640x136 view (CX 320, HW 320, CY 68, HH 68). Because CoCo 3
-pixels are about 2.5x taller than wide, 640x136 has nearly the reference's 800:440 shape on a
+800x440 view scaled to the CoCo's 640x136 view in logical x (CX 320, HW 320, CY 68, HH 68; the
+line routine halves x for the 320-wide screen). A logical x unit is about 2.5x narrower than a row
+is high, so 640x136 has nearly the reference's 800:440 shape on a
 monitor, so no separate squash is needed.
 """
 import sys
@@ -21,10 +22,12 @@ def k(i):
     return 1 / (1 + 0.85 * z)
 
 
-# Distance shading: the reference's bright(d, range), turned into a dot pattern for the line.
-# Each pattern bit covers 2 pixels along a line (or 1 row of a steep line), so no lit pixel stands
-# alone (the composite rule). Rows: 0 = no light, 1-8 = light range; columns: depth in thirds.
-PATTERNS = [(0.9, 0xFF), (0.65, 0xEE), (0.4, 0xAA), (0.2, 0x88), (0.0, 0x80)]   # 100/75/50/25/12%
+# Distance shading: the reference's bright(d, range), turned into a shade level 0 (bright) .. 4
+# (faint); each kind of thing has a table of colour and dot pattern per level (in src/view.asm).
+# Rows: 0 = no light, 1-8 = light range; columns: depth in thirds.
+PATTERNS = [(0.9, 0), (0.65, 1), (0.4, 2), (0.2, 3), (0.0, 4)]
+
+# Each kind of thing's colours and dots per level: wallshd, monshd, itemshd, ladshd in src/view.asm.
 
 
 def bright(d, rng):
@@ -55,10 +58,10 @@ def main():
     w('vb', 'fcb', vb, 'bottom y')
     w('vol', 'fdb', vol, 'left side-passage cutoff (signed)')
     w('vor', 'fdb', vor, 'right side-passage cutoff')
-    out += ['', '* Dot pattern for each light row (0 = no light, 1-8 = range) and depth in thirds',
+    out += ['', '* Shade level for each light row (0 = no light, 1-8 = range) and depth in thirds',
             'VPATW   equ     %d' % DEPTHS, 'vpat']
     for rng in range(9):
-        out.append('        fcb     ' + ','.join('$%02X' % pattern(bright(i / 3, rng)) for i in range(DEPTHS))
+        out.append('        fcb     ' + ','.join('%d' % pattern(bright(i / 3, rng)) for i in range(DEPTHS))
                    + '  ; ' + ('no light' if rng == 0 else 'range %d' % rng))
     # Ladders (the reference's renderMain): a trapezoid from 0.2 to 0.8 into the cell, half-width
     # 0.35 * HW * k; rails and rungs at 0.7 of that; rungs at 0.35, 0.5, 0.65. One row per cell
@@ -128,9 +131,10 @@ def main():
     out += ['', '* Screen row start addresses (screen mapped at SCRCPU), rows 0-191', 'rowaddr']
     for y in range(0, 192, 8):
         out.append('        fdb     ' + ','.join('SCRCPU+%d' % ((y + i) * 160) for i in range(8)))
-    out += ['', 'pixmask fcb     $C0,$30,$0C,$03 ; the pixel at x & 3',
-            'lmaskl  fcb     $FF,$3F,$0F,$03 ; pixels x & 3 .. 3 (left end of a horizontal line)',
-            'lmaskr  fcb     $C0,$F0,$FC,$FF ; pixels 0 .. x & 3 (right end)']
+    # 320x16 screen: 2 pixels per byte, x here is the screen's 0-319 (line halves the callers' x)
+    out += ['', 'pixmask fcb     $F0,$0F         ; the pixel at x & 1',
+            'lmaskl  fcb     $FF,$0F         ; pixels x & 1 .. 1 (left end of a horizontal line)',
+            'lmaskr  fcb     $F0,$FF         ; pixels 0 .. x & 1 (right end)']
     open(sys.argv[1], 'w').write('\n'.join(out) + '\n')
 
 

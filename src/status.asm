@@ -3,38 +3,38 @@
 * being shown too; blanking the rows first and then writing on them made the hands and health flash
 * (Steve). In the common bank (the font is needed anyway); SROW is in the direct page's free part.
 *
-* A character with bit 7 set is light blue; the heart's characters are red; the rest green.
+* Each cell's colour byte is kept beside it in scol (fixed RAM, main.asm), so any text colour works.
 SROW    equ     $0D80           ; 80 bytes ($0D80-$0DCF, filled before it's read): row 21, then row 22
 
 * sclear: both rows blank
-sclear  pshs    d,x
+sclear  pshs    d,x,u
         ldx     #SROW
+        ldu     #scol
         ldd     #$2020
 @c      std     ,x++
+        std     ,u++            ; (a space's colour doesn't show)
         cmpx    #SROW+80
         blo     @c
-        puls    d,x,pc
+        puls    d,x,u,pc
 
 * sprint: as printat (A = row HANDROW or STATROW, B = column, Y = string), into SROW, in the colour
-* of textmask (light blue or green)
-sprint  pshs    d,x,y
-        lda     textmask        ; TXBLUE ($FF): bit 7; TXGREEN ($55): none
-        anda    #$80
-        pshs    a
-        lda     1,s
+* of textmask
+sprint  pshs    d,x,y,u
         suba    #HANDROW
         beq     @o
         lda     #40
-@o      adda    2,s
+@o      adda    1,s
         ldx     #SROW
         leax    a,x
+        ldu     #scol
+        leau    a,u
+        ldb     textmask
 @n      lda     ,y+
         beq     @e
-        ora     ,s
         sta     ,x+
+        stb     ,u+
         bra     @n
-@e      leas    1,s
-        puls    d,x,y,pc
+@e      puls    d,x,y,u,pc
 
 * sheart: the heart into SROW (as drawheart: big while it beats, small between, still after the game)
 sheart  lda     #CH_HEART2
@@ -47,31 +47,26 @@ sheart  lda     #CH_HEART2
 @h      sta     SROW+HEARTCOL
         inca
         sta     SROW+HEARTCOL+1
+        ldb     #TXRED
+        stb     scol+HEARTCOL
+        stb     scol+HEARTCOL+1
         rts
 
-* sflush: draw both rows from SROW on the page mapped
-sflush  pshs    d,x,y
+* sflush: draw both rows from SROW (colours from scol) on the page mapped
+sflush  pshs    d,x,y,u
         ldy     #SROW
+        ldu     #scol
         lda     #HANDROW
         bsr     @row
         lda     #STATROW
         bsr     @row
-        puls    d,x,y,pc
+        puls    d,x,y,u,pc
 @row    clrb
         lbsr    textpos
         ldb     #40
-@c      lda     ,y+
-        pshs    b
-        ldb     #TXBLUE
-        tsta
-        bmi     @b
-        ldb     #TXGREEN
-        cmpa    #CH_HEART       ; (the heart's characters are the last ones)
-        blo     @b
-        ldb     #TXRED
-@b      anda    #$7F
-        stb     textmask
-        puls    b
+@c      lda     ,u+
+        sta     textmask
+        lda     ,y+
         lbsr    putc
         leax    4,x
         decb

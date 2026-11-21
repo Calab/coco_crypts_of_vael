@@ -1,13 +1,14 @@
-* Line drawing on the 640x192, 4-colour screen mapped at SCRCPU.
-* Inputs (direct page): lx0, ly0, lx1, ly1 (x 0-639, y 0-191); the colour is set with setcol
-* ($55 colour 1, $AA colour 2, $FF colour 3, $00 erase, or a mix). Each pixel replaces only its own
-* 2 bits. lcol is the colour for the row being drawn.
-* Lines are dotted by lpat (set with setpat): each bit, from the top, covers 2 pixels along a
+* Line drawing on the 320x192, 16-colour screen mapped at SCRCPU (2 pixels per byte, the left one
+* in the high nibble; 160 bytes per row).
+* Inputs (direct page): lx0, ly0, lx1, ly1 (x 0-639, y 0-191): callers use logical x 0-639 and
+* line halves it on entry (lx0/lx1 are changed). The colour is set with setcol: the palette entry
+* in both nibbles ($11, $EE...; the entries are listed in main.asm). Each pixel replaces only its own
+* Lines are dotted by lpat (set with setpat): each bit, from the top, covers 1 pixel along a
 * mostly-horizontal line or 1 row of a steep one; $FF draws solid lines at full speed.
 * Horizontal lines use the same pattern anchored to the screen (byte column & 3), so lines at the
 * same depth line up.
 *
-*   setcol   A = colour fill byte (solid $55/$AA/$FF, or a mix like $A5)
+*   setcol   A = colour byte (palette entry in both nibbles)
 *   setpat   A = dot pattern ($FF solid, $EE 75%, $AA 50%, $88 25%, $80 12%)
 *   line     any line; horizontal and vertical ones take fast paths
 *   clrview  clear the 3D view (rows 0 to VIEWH-1) to colour 0
@@ -28,40 +29,15 @@ lcnt    equ     $0D11
 ltmp    equ     $0D12           ; 2
 lpat    equ     $0D14           ; dot pattern
 lpcur   equ     $0D15           ; pattern, rotated as the line is drawn
-lphalf  equ     $0D16           ; x-major lines: steps left on this pattern bit (2 per bit)
 lpm     equ     $0D17           ; 4: pattern as byte masks for horizontal lines
 lpk     equ     $0D1B           ; horizontal lines: which of the 4 masks is next
 ldx8    equ     $0D20           ; fast lines: dx and dy as bytes
 ldy8    equ     $0D21
 lkeep   equ     $0D22           ; fast steep / vertical lines: the bits to keep, and the pixel to set
 lset    equ     $0D23
-lcolb   equ     $0D1C           ; colour as set (for even rows)
-lcolsw  equ     $0D1D           ; the same with its two halves swapped (for odd rows)
-lcolx   equ     $0D1E           ; the colour for the next row, while a line is drawn
-lmix    equ     $0D1F           ; nonzero if the colour is a mix (the halves differ)
 
-* setcol: A = colour fill byte. A mix such as $A5 (red, red, green, green) alternates every 2 pixels
-* along a row, and swaps its halves on odd rows ($5A), so vertical lines alternate too.
-setcol  pshs    d
-        sta     <lcolb
-        lsla                    ; rotate by 4 bits: swap the halves
-        adca    #0
-        lsla
-        adca    #0
-        lsla
-        adca    #0
-        lsla
-        adca    #0
-        sta     <lcolsw
-        suba    <lcolb
-        sta     <lmix
-        puls    d,pc
-
-* rowsw: moving to the next row: swap lcol and lcolx (only called for mixed colours)
-rowsw   lda     <lcol
-        ldb     <lcolx
-        sta     <lcolx
-        stb     <lcol
+* setcol: A = colour byte (the palette entry in both nibbles)
+setcol  sta     <lcol
         rts
 
 * setpat: A = dot pattern. Also works out the 4 byte masks horizontal lines use.
@@ -74,10 +50,10 @@ setpat  pshs    d,u
         ldu     #lpm
         ldb     #4
 @mask   clra
-        lsl     <ltmp           ; first 2 pixels of this byte
+        lsl     <ltmp           ; left pixel of this byte
         bcc     @a
         ora     #$F0
-@a      lsl     <ltmp           ; last 2
+@a      lsl     <ltmp           ; right pixel
         bcc     @b
         ora     #$0F
 @b      sta     ,u+
@@ -101,6 +77,10 @@ line
         stx     lnlogp
 @nolog  puls    d,x
         endc
+        lsr     <lx0            ; logical x 0-639 to the screen's 0-319
+        ror     <lx0+1
+        lsr     <lx1
+        ror     <lx1+1
         ldd     <lx1
         subd    <lx0
         bhs     @ordered
@@ -152,11 +132,8 @@ line
         anda    <lmask
         eora    ,x
         sta     ,x
-        lsr     <lmask
-        lsr     <lmask
-        bne     @xstep
-        lda     #$C0
-        sta     <lmask
+        com     <lmask          ; $F0 <-> $0F: the other pixel; $F0 means a new byte
+        bpl     @xstep
         leax    1,x
 @xstep  ldd     <lerr
         subd    <ldy
@@ -165,10 +142,7 @@ line
         std     <lerr
         ldd     <lystep
         leax    d,x
-        tst     <lmix
-        beq     @xs1
-        lbsr    rowsw
-@xs1    leay    -1,y
+        leay    -1,y
         bne     @xloop
         rts
 @xnoy   std     <lerr
@@ -187,8 +161,7 @@ line
         inca
         lbne    @ypat           ; dotted
         ifndef  NOFAST
-        tst     <lmix           ; solid, one colour: the fast way (yfast)
-        lbeq    yfast
+        lbra    yfast           ; solid: the fast way
         endc
 @yloop  lda     ,x
         eora    <lcol
@@ -197,20 +170,13 @@ line
         sta     ,x
         ldd     <lystep
         leax    d,x
-        tst     <lmix
-        beq     @ys1
-        lbsr    rowsw
-@ys1
         ldd     <lerr
         subd    <ldx
         bpl     @ynox
         addd    <ldy
         std     <lerr
-        lsr     <lmask
-        lsr     <lmask
-        bne     @ynext
-        lda     #$C0
-        sta     <lmask
+        com     <lmask          ; $F0 <-> $0F: the other pixel; $F0 means a new byte
+        bpl     @ynext
         leax    1,x
 @ynext  leay    -1,y
         bne     @yloop
@@ -219,11 +185,9 @@ line
         leay    -1,y
         bne     @yloop
         rts
-* dotted x-major: a pattern bit per 2 pixels
+* dotted x-major: a pattern bit per pixel
 @xpat   lda     <lpat
         sta     <lpcur
-        lda     #2
-        sta     <lphalf
 @xpl    tst     <lpcur
         bpl     @xps
         lda     ,x
@@ -231,19 +195,12 @@ line
         anda    <lmask
         eora    ,x
         sta     ,x
-@xps    dec     <lphalf
-        bne     @xpm
-        lda     #2
-        sta     <lphalf
-        lda     <lpcur
+@xps    lda     <lpcur
         lsla
         adca    #0
         sta     <lpcur
-@xpm    lsr     <lmask
-        lsr     <lmask
-        bne     @xpe
-        lda     #$C0
-        sta     <lmask
+        com     <lmask
+        bpl     @xpe
         leax    1,x
 @xpe    ldd     <lerr
         subd    <ldy
@@ -252,10 +209,7 @@ line
         std     <lerr
         ldd     <lystep
         leax    d,x
-        tst     <lmix
-        beq     @xs2
-        lbsr    rowsw
-@xs2    leay    -1,y
+        leay    -1,y
         bne     @xpl
         rts
 @xpn    std     <lerr
@@ -278,20 +232,13 @@ line
         sta     <lpcur
         ldd     <lystep
         leax    d,x
-        tst     <lmix
-        beq     @ys2
-        lbsr    rowsw
-@ys2
         ldd     <lerr
         subd    <ldx
         bpl     @ypn
         addd    <ldy
         std     <lerr
-        lsr     <lmask
-        lsr     <lmask
-        bne     @ypx
-        lda     #$C0
-        sta     <lmask
+        com     <lmask          ; $F0 <-> $0F: the other pixel; $F0 means a new byte
+        bpl     @ypx
         leax    1,x
 @ypx    leay    -1,y
         bne     @ypl
@@ -304,8 +251,9 @@ line
 
 * xfast: a solid, mostly horizontal line up to 255 pixels wide (from line). The pixels that land in
 * one screen byte are gathered and the byte written once (B collects them), and the loop is unrolled
-* by pixel position, so each pixel is a constant mask. A = Bresenham's error, kept as 0..dx-1, started
-* so the same pixels come out as the general loop. Y = pixels left, X = the byte, lmask = the first pixel.
+* by pixel position (2 per byte), so each pixel is a constant mask. A = Bresenham's error, kept as
+* 0..dx-1, started so the same pixels come out as the general loop. Y = pixels left, X = the byte,
+* lmask = the first pixel.
 xfast   stb     <ldx8
         lda     <ldy+1
         sta     <ldy8
@@ -320,22 +268,15 @@ xfast   stb     <ldx8
         bpl     @dir
         ldu     #xutab
 @dir    lda     <lmask          ; start at the first pixel's position in its byte
-        cmpa    #$C0
-        beq     @go
-        leau    2,u
-        cmpa    #$30
-        beq     @go
-        leau    2,u
-        cmpa    #$0C
-        beq     @go
+        bmi     @go             ; $F0: the left pixel
         leau    2,u
 @go     ldu     ,u
         puls    a
         clrb
         jmp     ,u
 
-xdtab   fdb     xd0,xd1,xd2,xd3
-xutab   fdb     xu0,xu1,xu2,xu3
+xdtab   fdb     xd0,xd1
+xutab   fdb     xu0,xu1
 
 * xflush: write the gathered pixels (B) of the byte at X in lcol; B = 0 after. Keeps A.
 xflush  pshs    a,b
@@ -348,132 +289,59 @@ xflush  pshs    a,b
         clrb
         rts
 
-* xswap: a mixed colour, new row: swap lcol and lcolx. Keeps A and B.
-xswap   pshs    a,b
-        lbsr    rowsw
-        puls    a,b,pc
-
-xd0    orb     #$C0
+xd0    orb     #$F0
         leay    -1,y
-        lbeq    xdend
+        beq     xdend
         adda    <ldy8
         bcs     xd0s
         cmpa    <ldx8
         bhs     xd0s
-xd1    orb     #$30
+xd1    orb     #$0F
         leay    -1,y
-        lbeq    xdend
+        beq     xdend
         adda    <ldy8
         bcs     xd1s
         cmpa    <ldx8
         bhs     xd1s
-xd2    orb     #$0C
-        leay    -1,y
-        lbeq    xdend
-        adda    <ldy8
-        bcs     xd2s
-        cmpa    <ldx8
-        bhs     xd2s
-xd3    orb     #$03
-        leay    -1,y
-        lbeq    xdend
-        adda    <ldy8
-        bcs     xd3s
-        cmpa    <ldx8
-        bhs     xd3s
-        lbsr    xflush          ; next byte
+        bsr     xflush          ; next byte
         leax    1,x
         bra     xd0
 xd0s   suba    <ldx8           ; next row
-        lbsr    xflush
+        bsr     xflush
         leax    ROWB,x
-        tst     <lmix
-        beq     xd0c
-        lbsr    xswap
-xd0c   lbra    xd1
+        bra     xd1
 xd1s   suba    <ldx8           ; next row
-        lbsr    xflush
-        leax    ROWB,x
-        tst     <lmix
-        beq     xd1c
-        lbsr    xswap
-xd1c   lbra    xd2
-xd2s   suba    <ldx8           ; next row
-        lbsr    xflush
-        leax    ROWB,x
-        tst     <lmix
-        beq     xd2c
-        lbsr    xswap
-xd2c   lbra    xd3
-xd3s   suba    <ldx8           ; next row
-        lbsr    xflush
+        bsr     xflush
         leax    ROWB+1,x
-        tst     <lmix
-        beq     xd3c
-        lbsr    xswap
-xd3c   lbra    xd0
-xdend   lbra    xflush
+        bra     xd0
+xdend   bra     xflush
 
-xu0    orb     #$C0
+xu0    orb     #$F0
         leay    -1,y
-        lbeq    xuend
+        beq     xuend
         adda    <ldy8
         bcs     xu0s
         cmpa    <ldx8
         bhs     xu0s
-xu1    orb     #$30
+xu1    orb     #$0F
         leay    -1,y
-        lbeq    xuend
+        beq     xuend
         adda    <ldy8
         bcs     xu1s
         cmpa    <ldx8
         bhs     xu1s
-xu2    orb     #$0C
-        leay    -1,y
-        lbeq    xuend
-        adda    <ldy8
-        bcs     xu2s
-        cmpa    <ldx8
-        bhs     xu2s
-xu3    orb     #$03
-        leay    -1,y
-        lbeq    xuend
-        adda    <ldy8
-        bcs     xu3s
-        cmpa    <ldx8
-        bhs     xu3s
-        lbsr    xflush          ; next byte
+        bsr     xflush          ; next byte
         leax    1,x
         bra     xu0
 xu0s   suba    <ldx8           ; next row
-        lbsr    xflush
+        bsr     xflush
         leax    -ROWB,x
-        tst     <lmix
-        beq     xu0c
-        lbsr    xswap
-xu0c   lbra    xu1
+        bra     xu1
 xu1s   suba    <ldx8           ; next row
-        lbsr    xflush
-        leax    -ROWB,x
-        tst     <lmix
-        beq     xu1c
-        lbsr    xswap
-xu1c   lbra    xu2
-xu2s   suba    <ldx8           ; next row
-        lbsr    xflush
-        leax    -ROWB,x
-        tst     <lmix
-        beq     xu2c
-        lbsr    xswap
-xu2c   lbra    xu3
-xu3s   suba    <ldx8           ; next row
-        lbsr    xflush
+        bsr     xflush
         leax    -ROWB+1,x
-        tst     <lmix
-        beq     xu3c
-        lbsr    xswap
-xu3c   lbra    xu0
-xuend   lbra    xflush
+        bra     xu0
+xuend   bra     xflush
 
 * masks: from lmask and lcol, lkeep = the bits to keep, lset = the pixel's bits in the colour
 masks   lda     <lmask
@@ -484,7 +352,7 @@ masks   lda     <lmask
         sta     <lset
         rts
 
-* yfast: a solid, one-colour, steep line (from line; dy <= 135, so dx and dy fit in a byte). Each
+* yfast: a solid, steep line (from line; dy <= 135, so dx and dy fit in a byte). Each
 * pixel is keep / set with the masks worked out once per column; B = Bresenham's error (0..dy-1,
 * started so the same pixels come out as the general loop), Y = pixels left.
 yfast   lda     <ldx+1
@@ -528,11 +396,8 @@ yfast   lda     <ldx+1
         bsr     @right
         bra     @up
 @done   rts
-@right  lsr     <lmask          ; one pixel right: the next pair of bits, or the next byte
-        lsr     <lmask
-        bne     @rm
-        lda     #$C0
-        sta     <lmask
+@right  com     <lmask          ; one pixel right: the other nibble, or the next byte
+        bpl     @rm
         leax    1,x
 @rm     pshs    b
         bsr     masks
@@ -544,25 +409,15 @@ pixaddr ldb     <ly0
         abx
         abx
         ldx     ,x
-        ldd     <lx0
-        lsra
-        rorb
+        ldd     <lx0            ; 2 pixels per byte
         lsra
         rorb
         leax    d,x
         ldb     <lx0+1
-        andb    #3
+        andb    #1
         ldu     #pixmask
         lda     b,u
         sta     <lmask
-        lda     <ly0            ; colour for this row: as set on even rows, swapped on odd
-        lsra                    ; (carry = the row's low bit; the loads below keep it. It was
-        lda     <lcolb          ; lsr + rol ly0, which left bit 7 in the carry: every row "even",
-        ldb     <lcolsw         ; so filled mixed colours came out in vertical stripes: Steve)
-        bcc     @even
-        exg     a,b
-@even   sta     <lcol
-        stb     <lcolx
         rts
 
 * vline0: vertical line at lx0 from ly0 to ly1 (either order)
@@ -578,10 +433,8 @@ vline0  lda     <ly0
         stb     <lcnt
         bsr     pixaddr
         ifndef  NOFAST
-        lda     <lpat           ; solid, one colour: keep / set masks, unrolled by 2
+        lda     <lpat           ; solid: keep / set masks, unrolled by 2
         inca
-        bne     @slow
-        tst     <lmix
         bne     @slow
         lbsr    masks
         ldb     <lcnt
@@ -622,10 +475,7 @@ vline0  lda     <ly0
         adca    #0
         sta     <lpcur
         leax    ROWB,x
-        tst     <lmix
-        beq     @vs
-        lbsr    rowsw
-@vs     dec     <lcnt
+        dec     <lcnt
         bne     @loop
         rts
 
@@ -635,19 +485,15 @@ hline0  lda     <lpat
         bne     hlinep          ; dotted
         lbsr    pixaddr
         ldb     <lx0+1
-        andb    #3
+        andb    #1
         ldu     #lmaskl
         lda     b,u
         sta     <lmask
-        ldd     <lx1            ; bytes from the first to the last: (x1 >> 2) - (x0 >> 2)
-        lsra
-        rorb
+        ldd     <lx1            ; bytes from the first to the last: (x1 >> 1) - (x0 >> 1)
         lsra
         rorb
         std     <ltmp
         ldd     <lx0
-        lsra
-        rorb
         lsra
         rorb
         pshs    d
@@ -655,7 +501,7 @@ hline0  lda     <lpat
         subd    ,s++
         stb     <lcnt
         ldb     <lx1+1
-        andb    #3
+        andb    #1
         ldu     #lmaskr
         lda     b,u
         tst     <lcnt
@@ -687,25 +533,21 @@ hlinep  lbsr    pixaddr
         ldd     <lx0            ; first byte column
         lsra
         rorb
-        lsra
-        rorb
         std     <ltmp
         andb    #3
         stb     <lpk
-        ldd     <lx1            ; bytes after the first: (x1 >> 2) - (x0 >> 2)
-        lsra
-        rorb
+        ldd     <lx1            ; bytes after the first: (x1 >> 1) - (x0 >> 1)
         lsra
         rorb
         subd    <ltmp
         stb     <lcnt
         ldb     <lx0+1          ; end masks
-        andb    #3
+        andb    #1
         ldu     #lmaskl
         lda     b,u
         sta     <lmask
         ldb     <lx1+1
-        andb    #3
+        andb    #1
         ldu     #lmaskr
         lda     b,u
         sta     <lrmask

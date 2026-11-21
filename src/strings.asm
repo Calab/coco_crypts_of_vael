@@ -229,7 +229,7 @@ m_dmg   fcn     ")   DMG +"
 m_dodge fcn     "   DODGE "
 m_pct   fcn     "%"
 m_seedlbl fcn   "SEED "
-m_lookret fcn   "TYPE LOOK TO RETURN"
+m_lookret fcn   "LOOK TO RETURN" ; (ours: TYPE dropped, Steve)
 
 * Status rows (the reference's L: / R: and health)
 m_lcolon fcn    "L: "

@@ -7,8 +7,8 @@ and try to take the Ember Crown from the Hollow King.
 This is a port of the web game *Crypts of Vael* by Steve Norton. The rules, monsters, items and
 numbers follow the web version; the graphics, sound and memory use were rebuilt for the CoCo 3.
 
-- 640 × 192 vector graphics: walls, monsters and items drawn as lines, fading with distance from
-  your light
+- 320 × 192 vector graphics in 16 colours: walls, monsters and items drawn as lines, fading with
+  distance from your light
 - Smooth steps and turns, with a two-page display so nothing flickers
 - Random mazes from a seed: the same seed always gives the same five levels
 - Monsters that sleep, wander, hunt you and call out in the dark
@@ -60,7 +60,7 @@ for the full list.
 | `ATTACK L` / `R` | Strike with what that hand holds |
 | `GET L` / `R` [item] | Pick something up into a hand |
 | `DROP L` / `R` · `STOW L` / `R` | Put it down, or put it in your pack |
-| `PULL L` / `R` item | Take something out of your pack |
+| `PULL L` / `R` item (or its number in EXAMINE) | Take something out of your pack |
 | `USE L` / `R` · `USE` item | Light a torch, drink a potion, read the map |
 | `EXAMINE` | Your pack, light, rank and the run so far |
 | `SLEEP` 1–20 | Rest to heal (not with enemies close) |

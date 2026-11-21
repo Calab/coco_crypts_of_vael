@@ -532,7 +532,7 @@ c_stow  lbsr    needhand
 @ret    rts
 
 c_pull  lbsr    needhand
-        bcs     @ret
+        lbcs    @ret
         sta     ch
         ldx     #hands
         ldb     a,x
@@ -543,7 +543,19 @@ c_pull  lbsr    needhand
         lbra    sayhand
 @free   lda     #2
         sta     tstart
-        clr     gcnt
+        lbsr    tokget          ; PULL hand n: the number the pack view shows (ours)
+        decb
+        bne     @words          ; not one character (or no word)
+        lda     ,x
+        suba    #'1
+        blo     @words
+        cmpa    #9
+        bhs     @words          ; not 1-9: item names have no digits
+        sta     gcnt
+        cmpa    npack
+        blo     @pull
+        bra     @none
+@words  clr     gcnt
 @find   lda     gcnt
         cmpa    npack
         bhs     @none
@@ -925,16 +937,15 @@ packview
         ldd     #(15<<8)|1
         ldy     #mbuf
         lbsr    printat
-        lda     #TXBLUE
+        lda     #TXCYAN         ; (Steve)
         sta     textmask
         ldd     #(16<<8)|1
         ldy     #m_lookret
         lbra    printat
 
 * ---- status rows: hands, health and the heart ----
-* paintstat: row 21: "L: item" from the left, "R: item" ending at the right (held items light blue,
-* empty hands green, as the reference's yellow / green), and in the middle the heart (columns 15-16,
-* red) and HP (from column 17). An item name over 12 letters shows its kind word instead
+* paintstat: row 21: "L: item" from the left, "R: item" ending at the right (cyan, held or empty:
+* Steve, 320x16), and in the middle the heart (columns 15-16, red) and HP (from column 17, yellow). An item name over 12 letters shows its kind word instead
 * (none do now; MENDING BREW was renamed to fit). Row 22: RANK and XP centred, WINDED / EXHAUSTED at
 * the right. Blank on the title.
 HEARTCOL equ    15
@@ -955,14 +966,14 @@ paintstat                       ; (built in SROW, then drawn a cell at a time: s
         lbsr    mbnum
         ldu     mbp
         clr     ,u
-        lda     #TXGREEN
+        lda     #TXYELLOW
         sta     textmask
         ldd     #(HANDROW<<8)|(HEARTCOL+2)
         ldy     #mbuf
         lbsr    sprint
         lbsr    sheart
-        lbsr    mbstart         ; row 22, centred: RANK n  XP n (the reference's, in its item
-        ldx     #m_rank         ;   colour: our light blue)
+        lbsr    mbstart         ; row 22, centred: RANK n  XP n (yellow: Steve)
+        ldx     #m_rank
         lbsr    mbstr
         lbsr    rank
         tfr     a,b
@@ -974,7 +985,7 @@ paintstat                       ; (built in SROW, then drawn a cell at a time: s
         lbsr    mbnum
         ldu     mbp
         clr     ,u
-        lda     #TXBLUE
+        lda     #TXYELLOW
         sta     textmask
         tfr     u,d             ; centred on the row (Steve): column (40 - length) / 2
         subd    #mbuf
@@ -1008,7 +1019,6 @@ paintstat                       ; (built in SROW, then drawn a cell at a time: s
         ldx     #hands
         lda     ch
         ldb     a,x
-        lda     #TXGREEN
         cmpb    #HANDE
         bne     @held
         ldx     #m_empty
@@ -1025,8 +1035,9 @@ paintstat                       ; (built in SROW, then drawn a cell at a time: s
         lslb
         ldx     #ikwords
         ldx     b,x
-@full   lda     #TXBLUE
-@nm     sta     textmask
+@full
+@nm     lda     #TXCYAN
+        sta     textmask
         lbsr    mbstr
         ldu     mbp
         clr     ,u

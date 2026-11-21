@@ -60,7 +60,9 @@ render
         puls    a
         sta     pdir
         clr     vclip
-        lda     #$AA            ; the seam between them, half bright as in the reference
+        lda     #$22            ; the seam between them, half bright as in the reference: mid white
+        lbsr    setcol
+        lda     #$FF
         lbsr    setpat
         ldd     #320
         std     <lx0
@@ -222,8 +224,8 @@ contents
 * ladder: A = 0 for a down ladder (a hole in the floor), 1 for an up ladder (in the ceiling);
 * B = the cell's near edge in thirds (-2 up). Trapezoid outline, two rails and three rungs.
 ladder  sta     lup
-        lda     #LADCOL
-        lbsr    setcol
+        ldx     #ladshd
+        lbsr    shade
         addb    #2
         lda     #LTABROW
         mul
@@ -346,8 +348,8 @@ cellitems
         sta     isy
         lda     4,x
         sta     ihalf
-        lda     #ITEMCOL
-        lbsr    setcol
+        ldx     #itemshd
+        lbsr    shade
         clr     ij              ; j-th item here
         ldx     #items
         stx     iptr2
@@ -559,12 +561,12 @@ cellmon
         mul
         leax    d,x
         stx     mtp
-        tst     vlight          ; shade: like the cell, or faint in the dark
+        lda     vlev            ; shade: like the cell, or faint in the dark
+        tst     vlight
         bne     @lit
-        lda     #$88
-        lbsr    setpat
-@lit    lda     #TXRED
-        lbsr    setcol
+        lda     #4
+@lit    ldx     #monshd
+        lbsr    shadea
         ldd     tcx             ; straight ahead
         lbsr    monat
         bne     @sides
@@ -681,7 +683,8 @@ monat   std     mxy
         clra                    ; EQ
         rts
 
-* cellpat: B = depth in thirds. Sets the dot pattern for that depth and the current light.
+* cellpat: B = depth in thirds. Sets vlev, the shade level (0 bright .. 4 faint) for that depth and
+* the current light, and the walls' colour and dot pattern for it.
 cellpat pshs    b
         lda     vlight          ; light row: 0 = no light, else the range
         beq     @row
@@ -692,6 +695,16 @@ cellpat pshs    b
         adca    #0
         ldx     #vpat
         lda     d,x
+        sta     vlev
+        ldx     #wallshd
+* shade: X = a shade table (tables.asm: 5 levels of colour, dot pattern); sets them for level vlev.
+* shadea: the same for level A.
+shade   lda     vlev
+shadea  lsla
+        leax    a,x
+        lda     ,x
+        lbsr    setcol
+        lda     1,x
         lbra    setpat
 
 * side: A = 0 for the left wall of cell ci, 1 for the right. Cell position in tcx, tcy;
@@ -785,6 +798,15 @@ STARTLIGHT equ  0               ; timing walk only: its light (the game starts d
 vlight  fcb     0               ; the burning light's full range: 7 lantern, 4 torch, 0 none
 vrange  fcb     1               ; how far you see now (lightRange; at least your own cell)
 lbase   fcb     0               ; contents: cell's near edge in thirds (signed)
+vlev    fcb     0               ; cellpat: the cell's shade level (0-4)
+
+* Shade tables (Steve's 320x16 scheme, 2026-11-20): colour byte, dot pattern for shade levels 0
+* (bright) to 4 (faint). Palette entries as in main.asm: walls 3 whites, enemies 4 reds, items 3
+* yellows, ladders 3 cyans; the dimmest shade is dotted further ($AA 50%, $88 25%) for the farthest.
+wallshd fcb     $11,$FF,$22,$FF,$33,$FF,$33,$AA,$33,$88
+monshd  fcb     $44,$FF,$55,$FF,$66,$FF,$77,$FF,$77,$AA
+itemshd fcb     $88,$FF,$99,$FF,$AA,$FF,$AA,$AA,$AA,$88
+ladshd  fcb     $BB,$FF,$CC,$FF,$DD,$FF,$DD,$AA,$DD,$88
 icnt    fcb     0               ; cellitems: items in this cell
 ishr6   fcb     0               ; drawshp: scales are times 64 (monsters), else 256 (icons)
 ipfn    fdb     0               ; drawshp: ipointm or ipointi

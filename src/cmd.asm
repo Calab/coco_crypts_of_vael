@@ -1326,11 +1326,11 @@ c_sleep lda     #1              ; how long: 1-20
         clr     slhead
         lda     #1
         sta     sleeping
-        ldx     #PALETTE        ; dark
-        clr     ,x+
-        clr     ,x+
-        clr     ,x+
-        clr     ,x
+        ldx     #PALETTE        ; dark: all 16 entries
+        ldb     #16
+@dark   clr     ,x+
+        decb
+        bne     @dark
         lda     sln             ; n x 5 s = n x 300 ticks
         ldb     #150
         mul

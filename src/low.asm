@@ -65,7 +65,7 @@ monletters
         lda     7,x
         cmpa    #$FF
         beq     @next
-        lda     #TXBLUE
+        lda     #ITEMCOL
         lbsr    setcol
         ldd     mlx
         addb    mcw
