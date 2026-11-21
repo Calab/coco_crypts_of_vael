@@ -3,13 +3,14 @@
 * Inputs (direct page): lx0, ly0, lx1, ly1 (x 0-639, y 0-191): callers use logical x 0-639 and
 * line halves it on entry (lx0/lx1 are changed). The colour is set with setcol: the palette entry
 * in both nibbles ($11, $EE...; the entries are listed in main.asm). Each pixel replaces only its own
+* 4 bits (its nibble), so the other pixel in the byte is kept.
 * Lines are dotted by lpat (set with setpat): each bit, from the top, covers 1 pixel along a
 * mostly-horizontal line or 1 row of a steep one; $FF draws solid lines at full speed.
 * Horizontal lines use the same pattern anchored to the screen (byte column & 3), so lines at the
 * same depth line up.
 *
 *   setcol   A = colour byte (palette entry in both nibbles)
-*   setpat   A = dot pattern ($FF solid, $EE 75%, $AA 50%, $88 25%, $80 12%)
+*   setpat   A = dot pattern ($FF solid; the shade tables also use $AA 50% and $88 25%)
 *   line     any line; horizontal and vertical ones take fast paths
 *   clrview  clear the 3D view (rows 0 to VIEWH-1) to colour 0
 

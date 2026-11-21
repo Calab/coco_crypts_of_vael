@@ -362,8 +362,8 @@ legend  lda     #TXBLUE
         rts
 
 * youmark: you, at mxc, myc pointing way B: a green arrow outline drawn twice, the second a
-* pixel larger each way for a thicker line (Steve: it was almost invisible), and a half-size red
-* one inside it (Steve)
+* pixel larger each way for a thicker line (Steve: it was almost invisible), and red filling the
+* inside (ever smaller red outlines down to a point; Steve, 2026-11-21: as prominent as possible)
 youmark stb     mdir
         ldd     mrx
         pshs    d
@@ -373,29 +373,42 @@ youmark stb     mdir
         lbsr    setcol
         ldb     mdir
         lbsr    arrowc
-        inc     mrx
-        inc     mry
-        inc     mbx
-        inc     mby
-        ldb     mdir
-        lbsr    arrowc
+        ldd     #$0201          ; a pixel larger each way (x: 2 logical units = 1 pixel)
+        bsr     mgrow
         ldd     2,s
         std     mrx
         ldd     ,s
         std     mbx
-        lsr     mrx
-        lsr     mry
-        lsr     mbx
-        lsr     mby
         lda     #TXRED
         lbsr    setcol
-        ldb     mdir
-        lbsr    arrowc
+@fill   ldd     #$FEFF          ; a pixel smaller each way, down to a point in the middle
+        bsr     mgrow
+        ldd     mrx
+        bne     @fill
+        ldd     mbx
+        bne     @fill
         puls    d
         std     mbx
         puls    d
         std     mrx
         rts
+
+* mgrow: add A to mrx and mbx, B to mry and mby (none below 0), then draw the arrow pointing mdir
+mgrow   ldx     #mrx
+        bsr     @p
+        bsr     @p
+        ldb     mdir
+        lbra    arrowc
+@p      pshs    d               ; one x, y pair
+        adda    ,x
+        bpl     @a
+        clra
+@a      sta     ,x+
+        addb    ,x
+        bpl     @b
+        clrb
+@b      stb     ,x+
+        puls    d,pc
 
 * diamonds: a diamond on each item's cell (REVEAL), in ITEMCOL
 diamonds

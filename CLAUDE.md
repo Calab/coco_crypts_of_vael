@@ -153,8 +153,10 @@ with CMOC is allowed for non-critical parts if it saves time. Line drawing and s
   - Colours: seen walls bright white (`WALLCOL`), unseen ones on REVEAL mid white, solid (`MAPDIM`);
     ladders solid cyan triangles pointing down / up (Steve; the reference's V / ^ lines didn't show at
     this size); you a green arrow outline (`TXGREEN`; orange was too close to the red inside, Steve) with
-    a half-size red one inside (2026-11-20: the outline drawn twice, the second a pixel larger each way,
-    and wider when pointing up/down: back corners 0.9 of its length, not 0.7); items yellow diamonds;
+    its inside filled red (2026-11-21, Steve: as prominent as possible; ever smaller red outlines, a
+    pixel smaller each way each time, down to a point) (2026-11-20: the outline drawn twice, the second
+    a pixel larger each way, and wider when pointing up/down: back corners 0.9 of its length, not 0.7;
+    since 320×16, a pixel across is 2 logical x units); items yellow diamonds;
     monsters red letters.
   - Maps stay open while moving and turning (no glide/pan then), as the reference's `mapSafeView`; LOOK
     or changing level closes them. Drawing takes 0.35 s (level 1) to 0.5 s (level 5); joining
@@ -392,7 +394,8 @@ with CMOC is allowed for non-critical parts if it saves time. Line drawing and s
   then redraws (`fxtick` in the main loop; `-DFXHOLD=30000` keeps it up for screenshots).
   - Your blow (`fxswing` from ATTACK): the held item swung in an arc at t = 0.45 (the reference's dotted
     motion trail at 0.30 was removed, Steve 2026-11-20), or a shield / fist thrust at its furthest.
-    Your swung item is yellow (`ITEMCOL`, Steve); the fist, shield and monsters' blows orange (`HITCOL`:
+    Whatever item you swing, weapons and shields (buckler, tower shield) alike, is drawn in the items'
+    colour, yellow (`ITEMCOL`, Steve); the bare fist and the monsters' blows orange (`HITCOL`:
     `fxpic1` picks by picture number and ignores the colours stored in `fxpics.asm`).
     Right-hand pictures; the left hand flips x. Items get the shape's hidden lines removed (`hide`).
   - A monster's blow (`fxstrike` from `mattack`): claw rakes (crawler, hound, wraith), blade arc
