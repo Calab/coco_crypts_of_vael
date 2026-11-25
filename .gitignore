@@ -17,3 +17,5 @@ remove_basic.txt
 *.swp
 *~
 .DS_Store
+
+!/screenshot.png
